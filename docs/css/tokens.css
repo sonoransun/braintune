@@ -1,0 +1,134 @@
+/* Design tokens: band palettes (core/palette.js BAND_PALETTES), neutrals (NEUTRALS), motion and sizes (plan §7.5).
+   Values are copied from docs/js/core/palette.js; keep them in sync by hand. */
+
+:root {
+  /* dark neutrals */
+  --text: #EEF1FF;
+  --text-2: #B9C0DA;
+  --surface: rgb(10 14 32 / 0.82);
+  --surface-opaque: rgb(10 14 32 / 0.94);
+  --surface-2: rgb(255 255 255 / 0.06);
+  --border: rgb(255 255 255 / 0.12);
+  --border-strong: rgb(255 255 255 / 0.40);
+  --track: rgb(255 255 255 / 0.40);
+  --thumb: #FFFFFF;
+  --focus: #FFFFFF;
+  --focus-inner: #0A0E20;
+  --scrim: rgb(10 14 32 / 0.55);
+
+  /* alpha (Calm) is the default band until boot.js sets data-band */
+  --sky-top: #05161C;
+  --sky-mid: #0E3844;
+  --glow: #2E8F9E;
+  --sea-far: #0F4552;
+  --sea-near: #072029;
+  --foam: #BFF3EC;
+  --accent: #5FD4C8;
+  --accent-ink: #5FD4C8;
+  --orb-core: #3FBFB2;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-breath: cubic-bezier(0.37, 0, 0.63, 1);
+  --t-press: 120ms;
+  --t-fast: 180ms;
+  --t-base: 260ms;
+  --t-slow: 480ms;
+  --t-state: 1200ms;
+  --t-scene: 2500ms;
+  --t-breath: 10900ms;
+  --t-cat-breath: 10000ms;
+  --t-tail: 6000ms;
+
+  /* sizes */
+  --orb: clamp(150px, 44vmin, 220px);
+  --sheet-peek: 62svh;
+  --mini-h: 56px;
+  --header-h: 56px;
+  --panel-w: 380px;
+  --gutter: 16px;
+  --radius: 16px;
+  --radius-sheet: 28px;
+  --target: 44px;
+}
+
+/* --- dark band palettes ----------------------------------------------------------------------------------- */
+html[data-band="delta"] { --sky-top: #070A1F; --sky-mid: #10164A; --glow: #5A63E0; --sea-far: #1A2260; --sea-near: #0A0F33; --foam: #B8C0FF; --accent: #8F96FF; --accent-ink: #8F96FF; --orb-core: #6C74F5; }
+html[data-band="theta"] { --sky-top: #0E0820; --sky-mid: #24175A; --glow: #8A5CF0; --sea-far: #2A1C66; --sea-near: #130C36; --foam: #D9C6FF; --accent: #C49DFF; --accent-ink: #C49DFF; --orb-core: #9D74F5; }
+html[data-band="alpha"] { --sky-top: #05161C; --sky-mid: #0E3844; --glow: #2E8F9E; --sea-far: #0F4552; --sea-near: #072029; --foam: #BFF3EC; --accent: #5FD4C8; --accent-ink: #5FD4C8; --orb-core: #3FBFB2; }
+html[data-band="beta"]  { --sky-top: #061222; --sky-mid: #0E2E52; --glow: #2F7FD0; --sea-far: #10396A; --sea-near: #071B33; --foam: #C9E8FF; --accent: #6CC1FF; --accent-ink: #6CC1FF; --orb-core: #4BA9F0; }
+html[data-band="gamma"] { --sky-top: #12091F; --sky-mid: #3D1F4D; --glow: #FF9F6E; --sea-far: #3A1F55; --sea-near: #170D2E; --foam: #FFE1C4; --accent: #FFC46B; --accent-ink: #FFC46B; --orb-core: #F2A65A; }
+
+/* --- light theme -------------------------------------------------------------------------------------------- */
+html[data-theme="light"] {
+  --text: #141A2E;
+  --text-2: #4A5068;
+  --surface: rgb(255 255 255 / 0.78);
+  --surface-opaque: rgb(255 255 255 / 0.94);
+  --surface-2: rgb(20 26 46 / 0.06);
+  --border: rgb(20 26 46 / 0.14);
+  --border-strong: rgb(20 26 46 / 0.52);
+  --track: rgb(20 26 46 / 0.52);
+  --thumb: #FFFFFF;
+  --focus: #141A2E;
+  --focus-inner: #FFFFFF;
+  --scrim: rgb(255 255 255 / 0.55);
+  --foam: #FFFFFF;
+}
+html[data-theme="light"][data-band="delta"] { --sky-top: #E9ECFF; --sky-mid: #C9CFFF; --glow: #B7BEFF; --sea-far: #8C96F0; --sea-near: #6A74D8; --foam: #FFFFFF; --accent: #5B63E6; --accent-ink: #3F48C9; --orb-core: #5B63E6; }
+html[data-theme="light"][data-band="theta"] { --sky-top: #F3EBFF; --sky-mid: #DCCBFF; --glow: #CDB8FF; --sea-far: #A58CF0; --sea-near: #8468D8; --foam: #FFFFFF; --accent: #8B64F0; --accent-ink: #6A3FD0; --orb-core: #8B64F0; }
+html[data-theme="light"][data-band="alpha"] { --sky-top: #E4F8F5; --sky-mid: #B9ECE6; --glow: #A9E6DF; --sea-far: #5FC9BE; --sea-near: #3FA99E; --foam: #FFFFFF; --accent: #1FA193; --accent-ink: #0A665E; --orb-core: #1FA193; }
+html[data-theme="light"][data-band="beta"]  { --sky-top: #E6F3FF; --sky-mid: #C2DFFF; --glow: #B4DAFF; --sea-far: #6BB4F2; --sea-near: #4A93D6; --foam: #FFFFFF; --accent: #2E8AE0; --accent-ink: #0B5FAE; --orb-core: #2E8AE0; }
+html[data-theme="light"][data-band="gamma"] { --sky-top: #FFF3E6; --sky-mid: #FFDDBE; --glow: #FFB07A; --sea-far: #F0A878; --sea-near: #D98A5A; --foam: #FFFFFF; --accent: #DD782D; --accent-ink: #9C4710; --orb-core: #DD782D; }
+
+/* --- layout size overrides --------------------------------------------------------------------------------- */
+html[data-layout="short"] { --orb: 140px; }
+html[data-layout="desktop"] { --orb: 280px; --panel-w: 380px; }
+@media (min-width: 1440px) {
+  html[data-layout="desktop"] { --orb: 300px; --panel-w: 400px; }
+}
+
+/* --- user preferences (plan §9) ---------------------------------------------------------------------------- */
+@media (prefers-contrast: more) {
+  :root {
+    --text-2: #D9DEF2;
+    --border: rgb(255 255 255 / 0.40);
+    --border-strong: rgb(255 255 255 / 0.70);
+    --track: rgb(255 255 255 / 0.70);
+    --surface: rgb(10 14 32 / 0.96);
+    --scrim: rgb(10 14 32 / 0.80);
+  }
+  html[data-theme="light"] {
+    --text-2: #2A3048;
+    --border: rgb(20 26 46 / 0.40);
+    --border-strong: rgb(20 26 46 / 0.80);
+    --track: rgb(20 26 46 / 0.80);
+    --surface: rgb(255 255 255 / 0.96);
+    --scrim: rgb(255 255 255 / 0.85);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root { --surface: rgb(10 14 32 / 0.98); --scrim: rgb(10 14 32 / 0.85); }
+  html[data-theme="light"] { --surface: rgb(255 255 255 / 0.98); --scrim: rgb(255 255 255 / 0.9); }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --text: CanvasText;
+    --text-2: CanvasText;
+    --surface: Canvas;
+    --surface-opaque: Canvas;
+    --surface-2: Canvas;
+    --border: CanvasText;
+    --border-strong: CanvasText;
+    --track: GrayText;
+    --thumb: ButtonText;
+    --focus: Highlight;
+    --focus-inner: Canvas;
+    --scrim: Canvas;
+    --accent: Highlight;
+    --accent-ink: LinkText;
+  }
+}

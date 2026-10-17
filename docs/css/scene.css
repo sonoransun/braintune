@@ -1,0 +1,47 @@
+/* Scene canvas, the CSS sky that stands in for it, and the Night dim state (plan §7.6, §7.7). No @keyframes here:
+   the only periodic visual change in the scene lives in the canvas (≥ 10 s periods, §7.9). */
+
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100vw;
+  height: 100lvh;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity var(--t-slow, 300ms) var(--ease-out, ease-out);
+}
+
+/* Scene Off: the canvas is not drawn; the gradient below carries the band colours instead. */
+html[data-scene="off"] .scene {
+  display: none;
+}
+
+/* Sky fallback: the band palette as a plain gradient behind everything. Hidden once the canvas is live. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: none;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--sky-top, #05161c) 0%,
+    var(--sky-mid, #0e3844) 30%,
+    var(--sea-near, #072029) 100%
+  );
+}
+
+html:not([data-scene="full"]) body::before,
+body:not(:has(canvas.scene))::before,
+body:has(canvas.scene:not([data-live]))::before {
+  display: block;
+}
+
+/* Night dim (Sleep/Rest after a minute of stillness): the scene settles to 70 % over 2 s, restores in 300 ms. */
+html[data-dim="night"] .scene {
+  opacity: 0.7;
+  transition-duration: 2s;
+}

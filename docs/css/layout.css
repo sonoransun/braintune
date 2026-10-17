@@ -1,0 +1,86 @@
+/* Regions, stacking and the three layouts (plan §7.1–7.2): phone scroll-sheet, short two-column, desktop fixed panel.
+   z-order: canvas 0 · cats 1 · stage 2 · panel 3 · toasts 5 · overlay 6 · dialog 7. */
+
+/* --- regions ------------------------------------------------------------------------------------------------ */
+.scene { position: fixed; inset: 0; z-index: 0; width: 100vw; height: 100lvh; pointer-events: none; }
+.cats { position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+.app { position: relative; z-index: 2; pointer-events: none; } /* transparent so taps reach the cats layer (plan §7.1) */
+.stage { position: relative; z-index: 2; pointer-events: none; }
+.stage .orb, .stage .status-block, .stage .top > * { pointer-events: auto; }
+.panel { position: relative; z-index: 3; pointer-events: auto; }
+.toasts { position: fixed; z-index: 5; left: var(--gutter); right: var(--gutter); bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: stretch; gap: 8px; pointer-events: none; }
+.overlay { position: fixed; inset: 0; z-index: 6; }
+.firstrun { z-index: 7; }
+
+/* --- stage grid (shared) ------------------------------------------------------------------------------------- */
+.stage {
+  display: grid;
+  grid-template-rows: calc(var(--header-h) + env(safe-area-inset-top, 0px)) minmax(0, 1fr) auto auto minmax(72px, 0.5fr);
+  grid-template-columns: 100%;
+  justify-items: center;
+  padding: 0 var(--gutter);
+}
+.top { grid-row: 1; justify-self: stretch; display: flex; align-items: center; gap: 8px; padding-top: env(safe-area-inset-top, 0px); min-height: var(--header-h); }
+.orb { grid-row: 3; }
+.status-block { grid-row: 4; }
+
+/* --- phone: the document scrolls; the panel is a sheet that starts at the peek line --------------------------- */
+html[data-layout="phone"] { scroll-snap-type: y proximity; scroll-padding-top: calc(var(--mini-h) + 8px); scroll-behavior: smooth; }
+html[data-layout="phone"] .stage { height: max(var(--sheet-peek), 24rem); scroll-snap-align: start; scroll-margin-top: calc(-1 * (var(--mini-h) + 8px)); }
+html[data-layout="phone"] .panel {
+  min-height: calc(100lvh - var(--mini-h));
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  background: var(--surface-opaque);
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 0.18);
+  scroll-snap-align: start;
+  scroll-margin-top: calc(-1 * (var(--mini-h) + 8px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sentinel { position: absolute; top: 0; left: 0; width: 1px; height: 1px; }
+.panel__inner { padding: 4px var(--gutter) 32px; }
+@media (min-width: 600px) {
+  html[data-layout="phone"] .panel__inner { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-items: start; }
+  html[data-layout="phone"] .section--presets, html[data-layout="phone"] .section--mix { grid-column: 1 / -1; }
+}
+
+/* mini transport: sticky at the sheet top; its controls only show once the stage has scrolled away */
+.mini { position: sticky; top: 0; z-index: 1; height: var(--mini-h); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; background: var(--surface-opaque); }
+.mini__controls { position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; padding: 0 var(--gutter); opacity: 1; transition: opacity var(--t-base) var(--ease-out), visibility 0s; }
+html[data-sheet="peek"] .mini__controls { opacity: 0; visibility: hidden; transition: opacity var(--t-base) var(--ease-out), visibility 0s var(--t-base); }
+html[data-sheet="peek"] .mini { background: transparent; }
+html[data-sheet="expanded"] .mini { border-bottom: 1px solid var(--border); border-radius: 0; }
+html[data-sheet="expanded"] .handle { opacity: 0; }
+html:not([data-layout="phone"]) .mini, html:not([data-layout="phone"]) .handle, html:not([data-layout="phone"]) .hint--sheet { display: none; }
+
+/* --- short: landscape phones, two columns ------------------------------------------------------------------- */
+html[data-layout="short"] body { overflow: hidden; }
+html[data-layout="short"] .app { display: grid; grid-template-columns: 2fr 3fr; height: 100svh; }
+html[data-layout="short"] .stage { height: 100svh; grid-template-rows: var(--header-h) minmax(0, 1fr) auto auto minmax(24px, 0.4fr); padding-left: calc(var(--gutter) + env(safe-area-inset-left, 0px)); }
+html[data-layout="short"] .panel { height: 100svh; overflow-y: auto; overscroll-behavior: contain; border-radius: var(--radius-sheet) 0 0 var(--radius-sheet); background: var(--surface-opaque); }
+html[data-layout="short"] .panel__inner { padding-right: calc(var(--gutter) + env(safe-area-inset-right, 0px)); }
+html[data-layout="short"] .wordmark__tagline { display: none; }
+
+/* --- desktop: scene fills the window minus a fixed right panel ---------------------------------------------- */
+html[data-layout="desktop"] body { overflow: hidden; }
+html[data-layout="desktop"] .app { height: 100svh; }
+html[data-layout="desktop"] .stage { position: fixed; inset: 0 var(--panel-w) 0 0; height: 100svh; grid-template-rows: var(--header-h) 1fr auto auto 1fr; padding: 0 32px; }
+html[data-layout="desktop"] .panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: var(--panel-w);
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  background: var(--surface); border-left: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+}
+html[data-layout="desktop"] .panel__inner { padding: 12px 20px 40px; }
+html[data-layout="desktop"] .toasts { left: 24px; right: auto; bottom: 24px; width: min(360px, calc(100vw - 48px)); }
+html[data-layout="short"] .toasts { right: auto; width: calc(40vw - 2 * var(--gutter)); }
+
+/* --- night dim (plan §7.7): UI to 35 %, canvas to 70 % over 2 s; any activity restores in 300 ms ------------- */
+.app, .cats, .scene { transition: opacity 300ms var(--ease-out); }
+html[data-dim="night"] .app, html[data-dim="night"] .cats { opacity: 0.35; transition: opacity 2s var(--ease-breath); }
+html[data-dim="night"] .scene { opacity: 0.7; transition: opacity 2s var(--ease-breath); }
+
+/* --- narrow phones (< 360): tagline hidden, chips 44 --------------------------------------------------------- */
+@media (max-width: 359px) {
+  .wordmark__tagline { display: none; }
+  .chip { min-height: var(--target); }
+}

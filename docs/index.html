@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-band="alpha" data-motion="full" data-scene="full" data-cats="on" data-layout="phone" data-pointer="coarse" data-sheet="peek" data-dim="none">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Brain Tune</title>
+<meta name="description" content="Set your head straight. Gentle brainwave tuning with rain, ocean and the occasional cat.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#05161C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Brain Tune">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/scene.css">
+<link rel="stylesheet" href="css/cats.css">
+<script src="js/boot.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#panel">Skip to controls</a>
+
+<svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0">
+  <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/><path d="M17.8 7a7 7 0 0 1 0 10"/></symbol>
+  <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="4" y="13" width="4" height="6" rx="1.5"/><rect x="16" y="13" width="4" height="6" rx="1.5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5.5v13"/><path d="M16 5.5v13"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><circle cx="7" cy="9" r="1.6"/><circle cx="11" cy="6" r="1.6"/><circle cx="15.5" cy="6.5" r="1.6"/><circle cx="18.5" cy="10" r="1.6"/><path d="M12.5 11c-3 0-5.5 2.6-5.5 5 0 1.5 1 2.5 2.4 2.5 1.2 0 2-.8 3.1-.8s1.9.8 3.1.8c1.4 0 2.4-1 2.4-2.5 0-2.4-2.5-5-5.5-5z"/></symbol>
+  <symbol id="i-droplet" viewBox="0 0 24 24"><path d="M12 3.5s-6 6.5-6 10.5a6 6 0 0 0 12 0c0-4-6-10.5-6-10.5z"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12c2 0 2-2 4.5-2s2.5 2 4.5 2 2-2 4.5-2 2.5 2 4.5 2"/><path d="M3 17c2 0 2-2 4.5-2s2.5 2 4.5 2 2-2 4.5-2 2.5 2 4.5 2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 11a3.5 3.5 0 0 0 0 7z"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 4v5M12 15v5M4 12h5M15 12h5M7.5 7.5l2 2M14.5 14.5l2 2M7.5 16.5l2-2M14.5 9.5l2-2"/></symbol>
+</svg>
+
+<canvas class="scene" id="scene" aria-hidden="true"></canvas>
+
+<main class="app">
+  <section class="stage" aria-labelledby="status">
+    <header class="top" data-cat-avoid>
+      <h1 class="wordmark"><span class="wordmark__name">Brain Tune</span> <span class="wordmark__tagline">Set your head straight</span></h1>
+      <button type="button" class="mode" id="mode">
+        <span class="sr-only">Listening</span>
+        <svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg>
+        <span class="mode__label" id="mode-label">Speakers</span>
+      </button>
+      <a class="top__settings" href="#settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg><span class="sr-only">Settings</span></a>
+    </header>
+
+    <button type="button" class="orb" id="orb" aria-label="Begin" aria-describedby="status sub" data-state="idle" data-cat-avoid>
+      <span class="orb__halo orb__halo--outer" aria-hidden="true"></span>
+      <span class="orb__halo orb__halo--inner" aria-hidden="true"></span>
+      <span class="orb__ripple" aria-hidden="true"></span>
+      <span class="orb__core" aria-hidden="true"></span>
+      <svg class="orb__ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="orb__ring-track" cx="50" cy="50" r="48"/><circle class="orb__ring-fill" cx="50" cy="50" r="48"/></svg>
+      <span class="orb__label" id="orb-label" aria-hidden="true">Begin</span>
+    </button>
+
+    <div class="status-block" data-cat-avoid>
+      <p class="status" id="status">Calm · 10 Hz</p>
+      <p class="sub" id="sub">Ready when you are.</p>
+      <p class="time-left" id="time-left" hidden></p>
+      <p class="hint" id="hint" hidden>Tap the glow to begin</p>
+      <p class="restart" id="restart" hidden><button type="button" class="link" id="restart-sound">Sound stopped? Restart sound</button></p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel" aria-labelledby="h-presets">
+    <div class="sentinel" id="sheet-sentinel" aria-hidden="true"></div>
+    <div class="mini" id="mini" data-cat-avoid>
+      <div class="handle" id="handle" aria-hidden="true"></div>
+      <div class="mini__controls" id="mini-controls">
+        <button type="button" class="mini__toggle" id="mini-toggle" aria-label="Begin">
+          <svg class="icon icon--play" aria-hidden="true"><use href="#i-play"></use></svg>
+          <svg class="icon icon--pause" aria-hidden="true"><use href="#i-pause"></use></svg>
+        </button>
+        <a class="mini__status" id="mini-status" href="#orb">Calm · 10 Hz</a>
+        <span class="mini__time" id="mini-time"></span>
+      </div>
+    </div>
+
+    <div class="panel__inner" id="panel-inner">
+      <section class="section section--presets" aria-labelledby="h-presets">
+        <h2 class="section__title" id="h-presets">Presets</h2>
+        <fieldset class="chips chips--presets" id="presets"><legend class="sr-only">Presets</legend></fieldset>
+      </section>
+
+      <section class="section section--mix" aria-labelledby="h-mix">
+        <h2 class="section__title" id="h-mix">Mix</h2>
+        <div class="row row--master">
+          <label class="row__label" for="master"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span>Volume</span></label>
+          <input class="range" type="range" id="master" min="0" max="100" step="1" value="70" data-layer="master">
+          <output class="row__out" id="master-out" for="master">70%</output>
+        </div>
+        <p class="hint hint--sheet" id="sheet-hint" hidden>Scroll up for rain, ocean and timer</p>
+        <div class="rows" id="mixer">
+          <div class="row" data-layer="tone">
+            <label class="row__label" for="mix-tone"><span>Tone</span></label>
+            <input class="range" type="range" id="mix-tone" min="0" max="100" step="1" value="55">
+            <output class="row__out" id="mix-tone-out" for="mix-tone">55%</output>
+            <button type="button" class="mute" id="mute-tone" aria-pressed="false" aria-label="Mute Tone"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg></button>
+          </div>
+          <div class="row" data-layer="rain">
+            <label class="row__label" for="mix-rain"><svg class="icon" aria-hidden="true"><use href="#i-droplet"></use></svg><span>Rain</span></label>
+            <input class="range" type="range" id="mix-rain" min="0" max="100" step="1" value="80">
+            <output class="row__out" id="mix-rain-out" for="mix-rain">80%</output>
+            <button type="button" class="mute" id="mute-rain" aria-pressed="false" aria-label="Mute Rain"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg></button>
+          </div>
+          <div class="row" data-layer="ocean">
+            <label class="row__label" for="mix-ocean"><svg class="icon" aria-hidden="true"><use href="#i-wave"></use></svg><span>Ocean</span></label>
+            <input class="range" type="range" id="mix-ocean" min="0" max="100" step="1" value="55">
+            <output class="row__out" id="mix-ocean-out" for="mix-ocean">55%</output>
+            <button type="button" class="mute" id="mute-ocean" aria-pressed="false" aria-label="Mute Ocean"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg></button>
+          </div>
+          <div class="row" data-layer="purr">
+            <label class="row__label" for="mix-purr"><svg class="icon" aria-hidden="true"><use href="#i-paw"></use></svg><span>Purr</span></label>
+            <input class="range" type="range" id="mix-purr" min="0" max="100" step="1" value="0" aria-describedby="purr-note">
+            <output class="row__out" id="mix-purr-out" for="mix-purr">0%</output>
+            <button type="button" class="mute" id="mute-purr" aria-pressed="false" aria-label="Mute Purr"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg></button>
+          </div>
+        </div>
+        <p class="note" id="purr-note">A ~26 Hz comfort rumble, not part of the tuning.</p>
+      </section>
+
+      <section class="section section--timer" aria-labelledby="h-timer">
+        <h2 class="section__title" id="h-timer">Timer</h2>
+        <fieldset class="chips chips--timer" id="timer-chips"><legend class="sr-only">Timer</legend>
+          <label class="chip chip--small"><input type="radio" name="timer" value="0"><span class="sr-only">No timer</span><span class="chip__text" aria-hidden="true">∞</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="10"><span class="chip__text">10 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="15"><span class="chip__text">15 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="20"><span class="chip__text">20 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="30"><span class="chip__text">30 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="45"><span class="chip__text">45 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="60"><span class="chip__text">60 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="90"><span class="chip__text">90 min</span></label>
+          <label class="chip chip--small"><input type="radio" name="timer" value="custom"><span class="chip__text">Custom</span></label>
+        </fieldset>
+        <div class="stepper" id="timer-custom" hidden>
+          <button type="button" class="stepper__btn" data-step="-1">−</button>
+          <output class="stepper__out" id="timer-custom-out">20 min</output>
+          <button type="button" class="stepper__btn" data-step="1">+</button>
+        </div>
+        <fieldset class="segment" id="timer-after">
+          <legend class="segment__legend">After the timer</legend>
+          <label class="segment__option"><input type="radio" name="after" value="stop" checked><span>Fade out</span></label>
+          <label class="segment__option"><input type="radio" name="after" value="ambient"><span>Keep rain and ocean</span></label>
+        </fieldset>
+      </section>
+
+      <section class="section section--fine disclosure" id="fine" aria-labelledby="h-fine">
+        <h2 class="section__title">
+          <button type="button" class="disclosure__toggle" id="fine-toggle" aria-expanded="false" aria-controls="fine-panel"><span id="h-fine">Fine tuning</span></button>
+        </h2>
+        <div class="disclosure__panel" id="fine-panel">
+          <div class="disclosure__inner">
+            <div class="row row--tune">
+              <label class="row__label" for="beat"><span>Beat</span></label>
+              <input class="range" type="range" id="beat" min="0.5" max="40" step="0.5" value="10">
+              <output class="row__out row__out--wide" id="beat-out" for="beat">10 Hz</output>
+            </div>
+            <p class="note" id="gamma-note" hidden>At 40 Hz the pulse is a fast flutter by nature.</p>
+            <div class="row row--tune">
+              <label class="row__label" for="pitch"><span>Pitch</span></label>
+              <input class="range" type="range" id="pitch" min="120" max="800" step="1" value="256">
+              <output class="row__out row__out--wide" id="pitch-out" for="pitch">256 Hz · near C4</output>
+            </div>
+            <fieldset class="segment" id="timbre">
+              <legend class="segment__legend">Timbre</legend>
+              <label class="segment__option"><input type="radio" name="timbre" value="sine"><span>Sine</span></label>
+              <label class="segment__option"><input type="radio" name="timbre" value="velvet" checked><span>Velvet</span></label>
+              <label class="segment__option"><input type="radio" name="timbre" value="glass"><span>Glass</span></label>
+              <label class="segment__option"><input type="radio" name="timbre" value="warm"><span>Warm</span></label>
+            </fieldset>
+            <div class="setting">
+              <span class="setting__label" id="pad-label">Pad</span>
+              <button type="button" class="switch" id="pad" role="switch" aria-checked="true" aria-labelledby="pad-label"><span class="switch__knob"></span></button>
+            </div>
+            <fieldset class="segment" id="style">
+              <legend class="segment__legend">Beat style</legend>
+              <label class="segment__option"><input type="radio" name="style" value="auto" checked><span>Auto</span></label>
+              <label class="segment__option"><input type="radio" name="style" value="binaural"><span>Binaural</span></label>
+              <label class="segment__option"><input type="radio" name="style" value="monaural"><span>Wavering</span></label>
+              <label class="segment__option"><input type="radio" name="style" value="isochronic"><span>Pulsing</span></label>
+            </fieldset>
+            <div class="actions">
+              <button type="button" class="btn" id="attune">Find your pitch</button>
+              <button type="button" class="btn btn--quiet" id="attune-cancel" hidden>Never mind</button>
+            </div>
+            <div class="disclosure disclosure--nested" id="explainer">
+              <button type="button" class="disclosure__toggle disclosure__toggle--small" id="explainer-toggle" aria-expanded="false" aria-controls="explainer-panel">What do these do?</button>
+              <div class="disclosure__panel" id="explainer-panel">
+                <div class="disclosure__inner prose">
+                  <p>Beat is the slow rhythm your brain is invited to follow, in cycles per second. Lower feels sleepier, higher more alert.</p>
+                  <p>Pitch is the tone that carries the beat. It does not change the tuning, so choose whatever sounds comfortable.</p>
+                  <p>Timbre is the colour of the tone, from a plain sine to a warmer, richer voice.</p>
+                  <p>Pad adds a quiet fifth, octave and sub beneath the tone.</p>
+                  <p>Beat style chooses how the beat is made. Binaural needs headphones. Pulsing works out loud. Wavering sums both tones in the centre. Auto picks for you.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--settings" id="settings" aria-labelledby="h-settings">
+        <h2 class="section__title" id="h-settings">Settings</h2>
+
+        <fieldset class="segment" id="listening" aria-describedby="listening-desc">
+          <legend class="segment__legend">Listening</legend>
+          <label class="segment__option"><input type="radio" name="listening" value="speakers" checked><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span>Speakers</span></label>
+          <label class="segment__option"><input type="radio" name="listening" value="headphones"><svg class="icon" aria-hidden="true"><use href="#i-headphones"></use></svg><span>Headphones</span></label>
+        </fieldset>
+        <p class="setting__desc" id="listening-desc">Speakers use a soft pulsing tone. Headphones give the full binaural effect.</p>
+
+        <div class="setting" id="stereo-row" hidden>
+          <div class="setting__text">
+            <span class="setting__label" id="stereo-label">Check left/right</span>
+            <span class="setting__desc" id="stereo-desc">Plays a short tone in the left ear, then the right.</span>
+          </div>
+          <button type="button" class="btn btn--small" id="stereo-check" aria-describedby="stereo-desc">Play check</button>
+        </div>
+
+        <div class="setting">
+          <div class="setting__text">
+            <span class="setting__label" id="cats-label">Cats</span>
+            <span class="setting__desc" id="cats-desc">Now and then a cat wanders by. Tap one to pet it.</span>
+          </div>
+          <button type="button" class="switch" id="cats-switch" role="switch" aria-checked="true" aria-labelledby="cats-label" aria-describedby="cats-desc"><span class="switch__knob"></span></button>
+        </div>
+
+        <div class="setting" id="keep-awake-row" hidden>
+          <div class="setting__text">
+            <span class="setting__label" id="keep-awake-label">Keep screen awake</span>
+            <span class="setting__desc" id="keep-awake-desc">Stops the screen turning off during a session.</span>
+          </div>
+          <button type="button" class="switch" id="keep-awake" role="switch" aria-checked="false" aria-labelledby="keep-awake-label" aria-describedby="keep-awake-desc"><span class="switch__knob"></span></button>
+        </div>
+
+        <fieldset class="segment" id="theme" aria-describedby="theme-desc">
+          <legend class="segment__legend">Theme</legend>
+          <label class="segment__option"><input type="radio" name="theme" value="dark" checked><svg class="icon" aria-hidden="true"><use href="#i-moon"></use></svg><span>Dark</span></label>
+          <label class="segment__option"><input type="radio" name="theme" value="light"><svg class="icon" aria-hidden="true"><use href="#i-sun"></use></svg><span>Light</span></label>
+          <label class="segment__option"><input type="radio" name="theme" value="auto"><span>Auto</span></label>
+        </fieldset>
+        <p class="setting__desc" id="theme-desc">Auto follows your device.</p>
+
+        <div class="setting">
+          <div class="setting__text">
+            <span class="setting__label" id="still-label">Still mode</span>
+            <span class="setting__desc" id="still-desc">Stops the waves, rain and walking cats. Follows your device when reduced motion is on.</span>
+          </div>
+          <button type="button" class="switch" id="still" role="switch" aria-checked="false" aria-labelledby="still-label" aria-describedby="still-desc"><span class="switch__knob"></span></button>
+        </div>
+
+        <fieldset class="segment" id="scene-setting" aria-describedby="scene-desc">
+          <legend class="segment__legend">Scene</legend>
+          <label class="segment__option"><input type="radio" name="scene" value="full" checked><span>Full</span></label>
+          <label class="segment__option"><input type="radio" name="scene" value="off"><span>Off</span></label>
+        </fieldset>
+        <p class="setting__desc" id="scene-desc">The animated sky and sea behind the controls.</p>
+
+        <div class="setting" id="haptics-row" hidden>
+          <div class="setting__text">
+            <span class="setting__label" id="haptics-label">Haptics</span>
+            <span class="setting__desc" id="haptics-desc">A light tap when you change something.</span>
+          </div>
+          <button type="button" class="switch" id="haptics" role="switch" aria-checked="true" aria-labelledby="haptics-label" aria-describedby="haptics-desc"><span class="switch__knob"></span></button>
+        </div>
+
+        <div class="setting">
+          <div class="setting__text">
+            <span class="setting__label" id="night-dim-label">Night dim</span>
+            <span class="setting__desc" id="night-dim-desc">During Sleep and Rest, the screen dims after a minute of quiet.</span>
+          </div>
+          <button type="button" class="switch" id="night-dim" role="switch" aria-checked="true" aria-labelledby="night-dim-label" aria-describedby="night-dim-desc"><span class="switch__knob"></span></button>
+        </div>
+
+        <div class="setting">
+          <div class="setting__text">
+            <span class="setting__label" id="shortcuts-label">Keyboard shortcuts</span>
+            <span class="setting__desc" id="shortcuts-desc">Space or K plays and pauses. 1 to 8 pick a preset. M mutes, H switches listening, T changes the theme, C calls a cat, ? opens About.</span>
+          </div>
+          <button type="button" class="switch" id="shortcuts" role="switch" aria-checked="true" aria-labelledby="shortcuts-label" aria-describedby="shortcuts-desc"><span class="switch__knob"></span></button>
+        </div>
+
+        <div class="setting install" id="install-row">
+          <div class="setting__text">
+            <span class="setting__label" id="install-label">Add to home screen</span>
+            <span class="setting__desc" id="install-desc">Open Brain Tune like an app, offline too.</span>
+            <span class="setting__desc" id="install-generic">Use your browser's Add to Home Screen / Install option</span>
+          </div>
+          <button type="button" class="btn btn--small" id="install" aria-describedby="install-desc" hidden>Install</button>
+        </div>
+
+        <div class="setting">
+          <div class="setting__text">
+            <span class="setting__label" id="reset-label">Reset all settings</span>
+            <span class="setting__desc" id="reset-desc">Back to the quiet defaults.</span>
+          </div>
+          <button type="button" class="btn btn--small" id="reset" aria-describedby="reset-desc">Reset</button>
+        </div>
+      </section>
+
+      <section class="section section--about disclosure" id="about" aria-labelledby="h-about">
+        <h2 class="section__title">
+          <button type="button" class="disclosure__toggle" id="about-toggle" aria-expanded="false" aria-controls="about-panel"><span id="h-about">About &amp; safety</span></button>
+        </h2>
+        <div class="disclosure__panel" id="about-panel">
+          <div class="disclosure__inner prose">
+            <h3 class="prose__title">Platform notes</h3>
+            <ul class="prose__list" id="platform-notes"></ul>
+            <p id="about-safety">Brain Tune is for relaxation, not medical treatment. Don't use it while driving. If you have a seizure disorder, a pacemaker, are pregnant or have a hearing condition, ask a professional first. Keep the volume moderate and stop if anything feels uncomfortable.</p>
+            <p>Binaural tones need stereo. If your device plays Mono Audio, choose Speakers.</p>
+            <p>Purr is a ~26 Hz comfort rumble, not part of the tuning.</p>
+            <p>Nothing leaves your device.</p>
+            <p id="storage-note" hidden>This browser is not keeping site data, so settings last until you close the page.</p>
+            <dl class="facts">
+              <div class="facts__item"><dt>Cats spotted</dt><dd id="cats-spotted">0</dd></div>
+              <div class="facts__item"><dt>Version</dt><dd id="version"></dd></div>
+            </dl>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+</main>
+
+<div class="cats" id="cats" role="group" aria-label="Visiting cats"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<div class="overlay" id="overlay" hidden>
+  <button type="button" class="overlay__button" id="overlay-button"><span class="overlay__text" id="overlay-text">Tap anywhere to let sound through</span></button>
+</div>
+
+<dialog class="firstrun" id="firstrun" aria-labelledby="firstrun-title">
+  <form method="dialog" class="firstrun__form" id="firstrun-form">
+    <div class="firstrun__body">
+      <h2 class="firstrun__title" id="firstrun-title">Welcome to Brain Tune</h2>
+      <p class="firstrun__intro">Gentle tones, rain and sea to help you settle, focus or drift off. Cats may wander by.</p>
+      <fieldset class="options">
+        <legend class="options__legend">How are you listening right now?</legend>
+        <label class="option">
+          <input type="radio" name="firstrun-listening" value="speakers" checked>
+          <svg class="icon option__icon" aria-hidden="true"><use href="#i-speaker"></use></svg>
+          <span class="option__text"><span class="option__label">Speakers</span><span class="option__desc">A soft pulsing tone that works out loud</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="firstrun-listening" value="headphones">
+          <svg class="icon option__icon" aria-hidden="true"><use href="#i-headphones"></use></svg>
+          <span class="option__text"><span class="option__label">Headphones</span><span class="option__desc">Each ear hears a slightly different tone: the full binaural effect</span></span>
+        </label>
+      </fieldset>
+      <p class="firstrun__safety">We start quiet. Brain Tune is for relaxation, not medical treatment. Don't use it while driving. If you have a seizure disorder, a pacemaker, are pregnant or have a hearing condition, ask a professional first. Keep the volume moderate and stop if anything feels uncomfortable.</p>
+    </div>
+    <div class="firstrun__actions">
+      <button type="submit" class="btn btn--primary" id="firstrun-begin" value="begin">Let's begin</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="sr-only" id="live-a" role="status"></div>
+<div class="sr-only" id="live-b" role="status"></div>
+<noscript>Brain Tune needs JavaScript to make sound.</noscript>
+</body>
+</html>

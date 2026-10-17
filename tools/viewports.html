@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Brain Tune viewports</title>
+<!-- Dev tool: shows the app in iframes at phone / landscape / tablet / desktop sizes.
+     Serve the repo root (npm run dev serves docs/ only):  node tools/serve.mjs --dir . --port 8081
+     then open http://localhost:8081/tools/viewports.html?sizes=phone,short&scale=0.8 -->
+<style>
+  body { margin: 0; padding: 16px; background: #111; color: #ddd; font: 14px system-ui, sans-serif; display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  figure { margin: 0; position: relative; }
+  figcaption { margin: 0 0 6px; }
+  .frame { transform-origin: top left; }
+  iframe { border: 1px solid #444; background: #000; display: block; }
+</style>
+</head>
+<body>
+<script>
+  const PRESETS = { phone: [390, 844], short: [844, 390], tablet: [768, 1024], desktop: [1280, 800] };
+  const q = new URLSearchParams(location.search);
+  const sizes = (q.get('sizes') || 'phone,short').split(',');
+  const scale = Number(q.get('scale') || 1);
+  const src = q.get('src') || '../docs/?nosw';
+  for (const key of sizes) {
+    const [w, h] = PRESETS[key] || key.split('x').map(Number);
+    const fig = document.createElement('figure');
+    fig.style.width = `${Math.round(w * scale)}px`;
+    fig.style.height = `${Math.round(h * scale) + 24}px`;
+    const cap = document.createElement('figcaption');
+    cap.textContent = `${key} ${w}×${h}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'frame';
+    wrap.style.transform = `scale(${scale})`;
+    const frame = document.createElement('iframe');
+    frame.width = w; frame.height = h; frame.src = src; frame.name = key; frame.title = `Brain Tune at ${w}×${h}`;
+    wrap.appendChild(frame); fig.append(cap, wrap); document.body.appendChild(fig);
+  }
+</script>
+</body>
+</html>

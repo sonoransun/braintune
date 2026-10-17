@@ -1,0 +1,282 @@
+/* Visiting cats (plan §7.8): the fixed layer, the cat button, pose boxes, idle motion, petting, Still mode.
+   Motion contract (§7.9): the only infinite animations here are transform-only (tail, legs, bob) or 10 s long
+   (sleep breath); blinks and pets are one-shot class toggles from cats.js. Nothing flashes, nothing changes colour. */
+
+/* --- layer ------------------------------------------------------------------------------------------------- */
+
+.cats {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 300ms linear;
+}
+
+html[data-dim="night"] .cats {
+  opacity: 0.7;
+  transition-duration: 2s;
+}
+
+/* --- the cat button ---------------------------------------------------------------------------------------- */
+
+.cat {
+  --x: 0px;
+  --y: 0px;
+  --rise: 12px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--w, 96px);
+  height: var(--h, 80px);
+  min-width: 88px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: none;
+  color: var(--text, #EEF1FF); /* whiskers are drawn in currentColor */
+  font: inherit;
+  transform: translate(var(--x), var(--y)) translateY(var(--rise));
+  opacity: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.cat.is-present {
+  --rise: 0px;
+  opacity: 1;
+}
+
+.cat[data-pose="walk"] {
+  z-index: 0; /* walkers pass behind the cats already settled on the ledge */
+}
+
+.cat:not([data-pose="walk"]) {
+  z-index: 1;
+}
+
+.cat.is-exiting {
+  --rise: 12px;
+  opacity: 0;
+  transition-duration: 500ms;
+}
+
+/* Sheet expanded: ledge cats fade away and stop taking taps. */
+.cats.is-hidden .cat {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms linear;
+}
+
+.cat:focus-visible {
+  outline: 3px solid var(--focus, #FFFFFF);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-inner, #0A0E20);
+}
+
+.cat__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 1px rgb(255 255 255 / 0.35)); /* dark rim light */
+  transition: transform var(--t-press, 120ms) var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.cat:active .cat__svg {
+  transform: scale(0.97);
+}
+
+.cat[data-coat="black"] .cat__svg {
+  filter: drop-shadow(0 0 1.5px rgb(255 255 255 / 0.55)); /* a black cat on a dark sea needs a little more rim */
+}
+
+.cat__sclera {
+  filter: drop-shadow(0 0 1.5px var(--eye)); /* eye glow in the dark */
+}
+
+html[data-theme="light"] .cat__svg {
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.22)); /* 1 px outline on light water */
+}
+
+html[data-theme="light"] .cat__sclera {
+  filter: none;
+}
+
+/* --- head, eyes, tail: transform origins in art units (view-box) or on the part itself (fill-box) ------------ */
+
+.cat__head {
+  transform-box: view-box;
+  transition: transform 400ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.cat__svg--sit .cat__head { transform-origin: 60px 46px; }
+.cat__svg--loaf .cat__head { transform-origin: 40px 60px; }
+.cat__svg--walk .cat__head { transform-origin: 96px 58px; }
+.cat__svg--sleep .cat__head { transform-origin: 84px 70px; }
+
+.cat.is-tilting .cat__head {
+  transform: rotate(-6deg);
+}
+
+.cat__eye {
+  transform-box: fill-box;
+  transform-origin: 50% 55%;
+  transition: transform 180ms ease-in-out, opacity 180ms linear;
+}
+
+.cat.is-blinking .cat__eye {
+  transform: scaleY(0.1);
+}
+
+.cat__happy {
+  opacity: 0;
+  transition: opacity 180ms linear;
+}
+
+.cat.is-happy g.cat__eye {
+  opacity: 0;
+}
+
+.cat.is-happy .cat__happy {
+  opacity: 1;
+}
+
+.cat__tail {
+  transform-box: view-box;
+}
+
+.cat__svg--sit .cat__tail {
+  transform-origin: 84px 82px;
+  animation: cat-tail var(--t-tail, 6s) var(--ease-breath, cubic-bezier(0.37, 0, 0.63, 1)) infinite;
+}
+
+.cat__svg--walk .cat__tail {
+  transform-origin: 34px 50px;
+  animation: cat-tail var(--t-tail, 6s) var(--ease-breath, cubic-bezier(0.37, 0, 0.63, 1)) infinite;
+}
+
+/* --- walking: diagonal leg pairs and a 1 px body bob ------------------------------------------------------- */
+
+.cat__leg {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+.cat__svg--walk .cat__leg--fl,
+.cat__svg--walk .cat__leg--br {
+  animation: cat-step 1.2s ease-in-out infinite;
+}
+
+.cat__svg--walk .cat__leg--fr,
+.cat__svg--walk .cat__leg--bl {
+  animation: cat-step 1.2s ease-in-out -0.6s infinite;
+}
+
+.cat__svg--walk .cat__body,
+.cat__svg--walk .cat__markings:not(.cat__markings--head) {
+  animation: cat-bob 1.2s ease-in-out infinite;
+}
+
+/* --- sleeping: a slow breath ------------------------------------------------------------------------------- */
+
+.cat__svg--sleep .cat__body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: cat-breath var(--t-cat-breath, 10s) var(--ease-breath, cubic-bezier(0.37, 0, 0.63, 1)) infinite;
+}
+
+/* --- hearts (one-shot, 3–5 per pet, removed by cats.js) ---------------------------------------------------- */
+
+.cat__heart {
+  position: absolute;
+  top: var(--hy, 0px);
+  left: var(--hx, 50%);
+  width: var(--size, 12px);
+  height: var(--size, 12px);
+  margin: calc(var(--size, 12px) / -2) 0 0 calc(var(--size, 12px) / -2);
+  background: var(--heart, #FF8FA3);
+  opacity: 0;
+  pointer-events: none;
+  transform: rotate(45deg);
+  animation: cat-heart 1.4s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) var(--delay, 0ms) forwards;
+}
+
+.cat__heart::before,
+.cat__heart::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.cat__heart::before { top: -50%; left: 0; }
+.cat__heart::after { top: 0; left: -50%; }
+
+/* --- keyframes (transform-only ones are the translational motion the 10 s floor exempts) -------------------- */
+
+@keyframes cat-tail {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+
+@keyframes cat-step {
+  0%, 100% { transform: rotate(-14deg); }
+  50% { transform: rotate(14deg); }
+}
+
+@keyframes cat-bob {
+  0%, 50%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-1px); }
+}
+
+@keyframes cat-breath {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1, 1.03); }
+}
+
+@keyframes cat-heart {
+  0% { opacity: 0; transform: translateY(0) rotate(45deg) scale(0.6); }
+  15% { opacity: 0.95; transform: translateY(calc(var(--rise, 40px) * -0.15)) rotate(45deg) scale(1); }
+  100% { opacity: 0; transform: translateY(calc(var(--rise, 40px) * -1)) rotate(45deg) scale(0.9); }
+}
+
+@keyframes cat-heart-still {
+  0% { opacity: 0; }
+  20% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* --- Still mode: opacity-only arrivals, no idle motion, hearts fade in place -------------------------------- */
+
+html[data-motion="still"] .cat {
+  --rise: 0px;
+  transition: opacity 400ms linear;
+}
+
+html[data-motion="still"] .cat__tail,
+html[data-motion="still"] .cat__leg,
+html[data-motion="still"] .cat__body,
+html[data-motion="still"] .cat__markings {
+  animation: none;
+}
+
+html[data-motion="still"] .cat.is-tilting .cat__head,
+html[data-motion="still"] .cat:active .cat__svg {
+  transform: none;
+}
+
+html[data-motion="still"] .cat__heart {
+  animation-name: cat-heart-still;
+}

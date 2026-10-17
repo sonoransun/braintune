@@ -1,0 +1,19 @@
+{
+  "name": "Brain Tune",
+  "short_name": "Brain Tune",
+  "description": "Set your head straight. Gentle brainwave tuning with rain, ocean and the occasional cat.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "en",
+  "background_color": "#05161C",
+  "theme_color": "#05161C",
+  "categories": ["health", "lifestyle", "music"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
