@@ -4,7 +4,7 @@ Set your head straight
 
 Brain Tune plays a soft tone that carries a slow beat in one of the classic brainwave bands, from delta to gamma, under rain and ocean that are synthesised on the spot, in front of an animated sea whose colours follow the band. Cats wander by now and then. It is one static page: vanilla HTML, CSS and ES modules, no build step, no dependencies, no accounts, no analytics. It installs as a home-screen app, works offline, and nothing leaves the device.
 
-Live: `https://<your-github-user>.github.io/braintune/` (replace the placeholder once you have published; see [Publish to GitHub Pages](#publish-to-github-pages)).
+Live: [https://braintune.org/](https://braintune.org/) (a fork publishes at `https://<your-github-user>.github.io/braintune/`; see [Publish to GitHub Pages](#publish-to-github-pages)).
 
 ## What it does
 
@@ -40,13 +40,15 @@ A collapsed section below the timer. Any change here turns the preset chip to Cu
 - **Timbre** Sine, Velvet, Glass or Warm.
 - **Pad** a quiet fifth, octave and sub beneath the tone.
 - **Beat style** Auto, Binaural, Wavering or Pulsing.
+- **Rainfall** drizzle, steady, heavy or downpour: how hard the rain falls. The Rain slider in Mix sets how loud it is, and the rain on screen follows this setting.
+- **Sea** glassy, gentle, rolling or heavy swell: how big the waves are, on screen and in the sound. The Ocean slider sets how loud they are.
 - **Find your pitch** while sound plays, the pitch sweeps slowly between 180 and 520 Hz, a minute each way. Tap the orb when it feels right and that pitch is kept. "Never mind" or Esc cancels.
 
 ## Rain, ocean and cats
 
 Every sound is generated in the browser when you press play. There are no audio files. Rain is filtered noise with individual drops; the ocean is a slow surf bed with waves that swell, crash and wash out, and every crash rolls a wave across the scene; the purr is a 26 Hz rumble shaped by a breath cycle.
 
-**Mix.** A Volume slider, then Tone, Rain, Ocean and Purr, each with a mute button. Presets set the sliders and also how heavy the rain falls and how big the waves are. The sliders set how loud each layer is. The Purr row carries its own disclosure: "A ~26 Hz comfort rumble, not part of the tuning." It sits at zero in every preset except Cat nap.
+**Mix.** A Volume slider, then Tone, Rain, Ocean and Purr, each with a mute button. Presets set the sliders and also how heavy the rain falls and how big the waves are; those two live under Fine tuning as Rainfall and Sea. The sliders set how loud each layer is. The Purr row carries its own disclosure: "A ~26 Hz comfort rumble, not part of the tuning." It sits at zero in every preset except Cat nap.
 
 **Cats.** Now and then a cat arrives along the bottom edge: black, orange tabby, grey or calico; sitting, loafing, sleeping or walking across. The first visit comes 20 to 40 seconds into a session, later ones every 45 seconds to two and a half minutes, with longer gaps when nothing is playing and shorter ones during Cat nap. At most two are present at once, one on narrow screens. Tap or click a cat to pet it: it narrows its eyes, hearts rise, a short purr sounds if you are playing, and it stays a little longer. Press C to pet the newest cat, or to call one when none is about. About & safety keeps a count of cats spotted, with a small toast at 1, 10, 25, 50 and 100. Cats always sit beneath the controls and never cover them.
 

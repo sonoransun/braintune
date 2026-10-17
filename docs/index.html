@@ -196,6 +196,16 @@
               <label class="segment__option"><input type="radio" name="style" value="monaural"><span>Wavering</span></label>
               <label class="segment__option"><input type="radio" name="style" value="isochronic"><span>Pulsing</span></label>
             </fieldset>
+            <div class="row row--tune">
+              <label class="row__label" for="rainfall"><span>Rainfall</span></label>
+              <input class="range" type="range" id="rainfall" min="0" max="100" step="5" value="45">
+              <output class="row__out row__out--wide" id="rainfall-out" for="rainfall">steady</output>
+            </div>
+            <div class="row row--tune">
+              <label class="row__label" for="sea"><span>Sea</span></label>
+              <input class="range" type="range" id="sea" min="0" max="100" step="5" value="35">
+              <output class="row__out row__out--wide" id="sea-out" for="sea">gentle</output>
+            </div>
             <div class="actions">
               <button type="button" class="btn" id="attune">Find your pitch</button>
               <button type="button" class="btn btn--quiet" id="attune-cancel" hidden>Never mind</button>
@@ -209,6 +219,8 @@
                   <p>Timbre is the colour of the tone, from a plain sine to a warmer, richer voice.</p>
                   <p>Pad adds a quiet fifth, octave and sub beneath the tone.</p>
                   <p>Beat style chooses how the beat is made. Binaural needs headphones. Pulsing works out loud. Wavering sums both tones in the centre. Auto picks for you.</p>
+                  <p>Rainfall sets how hard the rain falls; the Rain slider sets how loud it is.</p>
+                  <p>Sea sets how big the waves are; the Ocean slider sets how loud they are.</p>
                 </div>
               </div>
             </div>

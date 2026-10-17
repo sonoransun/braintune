@@ -166,8 +166,9 @@ async function main() {
         }
       });
     }
-    scene?.setRain(s.muted.rain ? 0 : s.mix.rain);
-    scene?.setOcean(s.muted.ocean ? 0 : s.mix.ocean);
+    // On screen, rain density and wave size follow the Rainfall / Sea intensities; a muted or silent layer shows none.
+    scene?.setRain(s.muted.rain || s.mix.rain <= 0 ? 0 : s.rainIntensity);
+    scene?.setOcean(s.muted.ocean || s.mix.ocean <= 0 ? 0 : s.oceanIntensity);
   }
 
   function applyIntensities(s) {
@@ -202,7 +203,7 @@ async function main() {
     const has = (key) => keys.includes(key);
     applyAttributes(s);
     if (has('presetId') || has('custom') || has('theme')) applyPalette(s);
-    if (has('mix') || has('muted')) applyLevels(s);
+    if (has('mix') || has('muted') || has('rainIntensity') || has('oceanIntensity')) applyLevels(s);
     if (has('rainIntensity') || has('oceanIntensity')) applyIntensities(s);
     if (has('motion') || has('scene')) applyMotion(s);
     if (has('presetId') || has('custom') || has('mix') || has('muted') || has('cats')) applyCats(s);

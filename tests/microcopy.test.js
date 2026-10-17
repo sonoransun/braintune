@@ -184,3 +184,14 @@ test('limitationsCopy gives platform lines plus the shared line', () => {
   assert.deepEqual(limitationsCopy('shared'), [STRINGS.limitations.shared]);
   assert.deepEqual(limitationsCopy('tv'), [STRINGS.limitations.shared]);
 });
+
+test('formatRainfall and formatSea pick words by intensity band', async () => {
+  const { formatRainfall, formatSea, describeLevel } = await import('../docs/js/core/microcopy.js');
+  assert.equal(formatRainfall(0), 'drizzle');
+  assert.equal(formatRainfall(0.45), 'steady');
+  assert.equal(formatRainfall(0.7), 'heavy');
+  assert.equal(formatRainfall(1), 'downpour');
+  assert.equal(formatSea(0.35), 'gentle');
+  assert.equal(formatSea(0.9), 'heavy swell');
+  assert.equal(describeLevel(Number.NaN, ['a', 'b', 'c', 'd']), 'a');
+});

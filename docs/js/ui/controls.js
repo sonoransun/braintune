@@ -38,7 +38,11 @@ export function bindSlider(input, {
     const span = max() - min();
     const pct = span > 0 ? ((value() - min()) / span) * 100 : 0;
     input.style.setProperty('--pct', `${clamp(pct, 0, 100)}%`);
-    if (output) output.textContent = format(value());
+    if (output) {
+      const text = format(value());
+      output.textContent = text;
+      input.setAttribute('aria-valuetext', text); // screen readers hear "steady" / "256 Hz · near C4", not the raw number
+    }
   }
   function cancelPending() {
     if (pending === null) return;

@@ -1,5 +1,93 @@
-.DS_Store
+# Brain Tune .gitignore
+#
+# The site is the committed docs/ folder, published as-is by GitHub Pages. Nothing in docs/ is
+# generated at build time, so no rule below may match anything inside it (docs/CNAME, docs/.nojekyll
+# and the PNG icons all ship). After editing this file, check with:
+#   git status --short --ignored | grep '^!!'
+#   git check-ignore -v $(find docs tests tools .github -type f)   # must print nothing
+
+# --- Dependencies and package-manager leftovers --------------------------------------------
+# The project has no dependencies; node_modules/ only appears if someone installs a tool locally.
 node_modules/
-coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tgz
+# package-lock.json is deliberately not ignored: a lockfile with no dependencies is harmless.
+
+# --- Logs, test output and Node diagnostics ------------------------------------------------
+logs/
 *.log
+coverage/
+.nyc_output/
+*.lcov
+lcov.info
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
+report.[0-9]*.json
+.node_repl_history
+
+# --- Caches, scratch and build output (this project produces none) --------------------------
+.cache/
+.eslintcache
+.stylelintcache
+.tmp/
+tmp/
+*.tmp
+dist/
+build/
+out/
+
+# --- Secrets and local environment ----------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+
+# --- Editors ----------------------------------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.history/
+*.swp
+*.swo
+*~
+.#*
+*.orig
+*.rej
+*.bak
+
+# --- Operating systems -----------------------------------------------------------------------
+# macOS. There is no `Icon?` rule on purpose: with core.ignorecase on (the default on a Mac
+# checkout) it matches case-insensitively and would ignore docs/icons/.
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+# Linux
+.directory
+.Trash-*
+.nfs*
+
+# --- Local-only tooling ----------------------------------------------------------------------
+# Agent settings and instructions stay on this machine; up.sh strips CLAUDE.md from the publish
+# copy as well. Remove these lines if you decide to share CLAUDE.md through the repository.
 .claude/
+CLAUDE.md
+CLAUDE.local.md
+# Personal deploy helper with a machine-specific path; it removes itself from the publish copy.
+up.sh

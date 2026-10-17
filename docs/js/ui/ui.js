@@ -1,7 +1,7 @@
 // mountUI (plan §5, §7): every control ↔ store, engine events → orb / status / mini / title / live regions, and the
 // session flows (first Play inside the click, timer, attune, resume offer, blocked / interrupted overlay).
 
-import { STRINGS, fill, statusLine, formatHz, formatPitch, formatPercent, formatMinutes, limitationsCopy } from '../core/microcopy.js';
+import { STRINGS, fill, statusLine, formatHz, formatPitch, formatPercent, formatMinutes, formatRainfall, formatSea, limitationsCopy } from '../core/microcopy.js';
 import { PRESETS, getPreset, resolvePreset, TIMER_OPTIONS, DEFAULT_PRESET_ID } from '../core/presets.js';
 import { bandOf, recommendMode, recommendCarrier } from '../core/entrainment.js';
 import { gateParams } from '../core/gate.js';
@@ -384,6 +384,8 @@ export function mountUI(root, options) {
   });
   const beat = bindSlider($('beat'), { output: $('beat-out'), format: formatHz, shiftStep: 5, setTimer, clearTimer, onInput: (v) => { engine?.setBeat(v); gammaNote.hidden = v < 30; }, onCommit: (v) => updateCustom({ beatHz: v }) });
   const pitch = bindSlider($('pitch'), { output: $('pitch-out'), format: formatPitch, shiftStep: 50, setTimer, clearTimer, onInput: (v) => engine?.setCarrier(v), onCommit: (v) => updateCustom({ carrierHz: v }) });
+  const rainfall = bindSlider($('rainfall'), { output: $('rainfall-out'), format: (v) => formatRainfall(v / 100), shiftStep: 20, setTimer, clearTimer, onInput: (v) => engine?.setRainIntensity(v / 100), onCommit: (v) => store.set('rainIntensity', v / 100) });
+  const sea = bindSlider($('sea'), { output: $('sea-out'), format: (v) => formatSea(v / 100), shiftStep: 20, setTimer, clearTimer, onInput: (v) => engine?.setOceanIntensity(v / 100), onCommit: (v) => store.set('oceanIntensity', v / 100) });
   const timbre = bindRadioGroup($('timbre'), { onChange: (v) => { buzz('tap'); engine?.setTimbre(v); updateCustom({ timbre: v }); } });
   const pad = bindSwitch($('pad'), { onChange: (on) => { buzz('toggle'); engine?.setPad(on); updateCustom({ pad: on }); } });
   const style = bindRadioGroup($('style'), {
@@ -470,6 +472,8 @@ export function mountUI(root, options) {
   }
 
   function syncFineControls(s) {
+    rainfall.set(pct(s.rainIntensity));
+    sea.set(pct(s.oceanIntensity));
     const r = resolveSettings(s, platform);
     beat.set(r.beatHz);
     pitch.set(r.carrierHz);
@@ -513,7 +517,7 @@ export function mountUI(root, options) {
       $(`mute-${layer}`).disabled = flag;
     }
     for (const group of [timerChips, afterRadios, timbre, style]) group.setDisabled(flag);
-    for (const control of [beat, pitch, pad]) control.setDisabled(flag);
+    for (const control of [beat, pitch, pad, rainfall, sea]) control.setDisabled(flag);
     for (const button of [attuneButton, $('stereo-check'), miniToggle]) button.disabled = flag;
   }
 

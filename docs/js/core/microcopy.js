@@ -136,6 +136,10 @@ export const STRINGS = deepFreeze({
     timbre: 'Timbre',
     pad: 'Pad',
     beatStyle: 'Beat style',
+    rainfall: 'Rainfall',
+    sea: 'Sea',
+    rainfallLevels: ['drizzle', 'steady', 'heavy', 'downpour'],
+    seaLevels: ['glassy', 'gentle', 'rolling', 'heavy swell'],
     timbres: { sine: 'Sine', velvet: 'Velvet', glass: 'Glass', warm: 'Warm' },
     styles: { auto: 'Auto', binaural: 'Binaural', monaural: 'Wavering', isochronic: 'Pulsing' },
     gammaNote: 'At 40 Hz the pulse is a fast flutter by nature.',
@@ -148,6 +152,8 @@ export const STRINGS = deepFreeze({
       pad: 'Pad adds a quiet fifth, octave and sub beneath the tone.',
       beatStyle:
         'Beat style chooses how the beat is made. Binaural needs headphones. Pulsing works out loud. Wavering sums both tones in the centre. Auto picks for you.',
+      rainfall: 'Rainfall sets how hard the rain falls; the Rain slider sets how loud it is.',
+      sea: 'Sea sets how big the waves are; the Ocean slider sets how loud they are.',
     },
   },
   timer: {
@@ -293,4 +299,20 @@ export function statusLine(state, ctx = {}) {
 export function limitationsCopy(platform) {
   const lines = STRINGS.limitations[platform];
   return [...(Array.isArray(lines) ? lines : []), STRINGS.limitations.shared];
+}
+
+/** Picks a word for a 0..1 intensity from four levels (bands below 0.3, 0.6 and 0.85). */
+export function describeLevel(x01, levels) {
+  const x = Number.isFinite(x01) ? Math.min(1, Math.max(0, x01)) : 0;
+  return levels[x < 0.3 ? 0 : x < 0.6 ? 1 : x < 0.85 ? 2 : 3];
+}
+
+/** Rainfall intensity as a word: drizzle, steady, heavy or downpour. */
+export function formatRainfall(x01) {
+  return describeLevel(x01, STRINGS.fineTuning.rainfallLevels);
+}
+
+/** Sea intensity as a word: glassy, gentle, rolling or heavy swell. */
+export function formatSea(x01) {
+  return describeLevel(x01, STRINGS.fineTuning.seaLevels);
 }
