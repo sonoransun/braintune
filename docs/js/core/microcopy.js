@@ -53,6 +53,7 @@ export const STRINGS = deepFreeze({
     catsGroup: 'Visiting cats',
     restartSound: 'Sound stopped? Restart sound',
     blockedOverlay: 'Tap anywhere to let sound through',
+    autoplayOverlay: 'Tap anywhere to start {preset}',
     interruptedOverlay: 'Sound paused while you were away. Tap to continue.',
     resumePrompt: 'Resume your session? {time} left',
     resume: 'Resume',
@@ -107,6 +108,7 @@ export const STRINGS = deepFreeze({
     },
     stereoCheck: { label: 'Check left/right', description: 'Plays a short tone in the left ear, then the right.', button: 'Play check' },
     cats: { label: 'Cats', description: 'Now and then a cat wanders by. Tap one to pet it.' },
+    autoplay: { label: 'Play on open', description: 'Starts Sleep as soon as Brain Tune opens. Some browsers wait for a first tap.' },
     keepAwake: {
       label: 'Keep screen awake',
       description: 'Stops the screen turning off during a session.',
@@ -116,10 +118,10 @@ export const STRINGS = deepFreeze({
     stillMode: { label: 'Still mode', description: 'Stops the waves, rain and walking cats. Follows your device when reduced motion is on.' },
     scene: { label: 'Scene', description: 'The animated sky and sea behind the controls.', full: 'Full', off: 'Off' },
     haptics: { label: 'Haptics', description: 'A light tap when you change something.' },
-    nightDim: { label: 'Night dim', description: 'During Sleep and Rest, the screen dims after a minute of quiet.' },
+    nightDim: { label: 'Night dim', description: 'During Sleep, Deep sleep and Rest, the screen dims after a minute of quiet.' },
     shortcuts: {
       label: 'Keyboard shortcuts',
-      description: 'Space or K plays and pauses. 1 to 8 pick a preset. M mutes, H switches listening, T changes the theme, C calls a cat, ? opens About.',
+      description: 'Space or K plays and pauses. 1 to 9 pick a preset. M mutes, H switches listening, T changes the theme, C calls a cat, ? opens About.',
     },
     addToHome: {
       label: 'Add to home screen',

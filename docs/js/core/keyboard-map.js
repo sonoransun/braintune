@@ -13,7 +13,7 @@ export function mapKeyToAction(evt, ctx) {
   if (key === ' ' || key === 'Spacebar' || code === 'Space' || lower === 'k') {
     return focusIsInteractive ? null : 'toggle-play';
   }
-  if (/^[1-8]$/.test(key)) return `preset:${key}`;
+  if (/^[1-9]$/.test(key)) return `preset:${key}`;
   if (key === '?') return 'about';
   return LETTER_ACTIONS[lower] ?? null;
 }

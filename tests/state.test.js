@@ -25,11 +25,12 @@ function fakeTimers() {
 
 test('defaults match the plan and are deep-frozen', () => {
   assert.equal(STORAGE_KEY, 'braintune:settings:v1');
-  assert.equal(SETTINGS_VERSION, 2);
-  assert.equal(DEFAULT_SETTINGS.v, 2);
+  assert.equal(SETTINGS_VERSION, 3);
+  assert.equal(DEFAULT_SETTINGS.v, 3);
+  assert.equal(DEFAULT_SETTINGS.autoplay, true);
   assert.equal(DEFAULT_SETTINGS.listening, 'speakers');
   assert.equal(DEFAULT_SETTINGS.presetId, 'sleep');
-  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.45, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 });
+  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.45, tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 });
   assert.deepEqual(DEFAULT_SETTINGS.timer, { byPreset: {}, after: 'stop' });
   assert.equal(DEFAULT_SETTINGS.theme, 'dark');
   assert.equal(DEFAULT_SETTINGS.keepAwake, false);
@@ -255,7 +256,7 @@ test('a v1 store keeps personal choices and takes the v2 defaults once (Sleep, p
     mix: { master: 0.9, tone: 0.55, rain: 0, ocean: 0.55, purr: 0 }, timer: { byPreset: { focus: 45 }, after: 'ambient' },
   };
   const out = migrate(v1);
-  assert.equal(out.v, 2);
+  assert.equal(out.v, 3);
   assert.deepEqual([out.firstRunDone, out.listening, out.theme, out.cats.spotted], [true, 'headphones', 'light', 7]);
   assert.equal(out.presetId, 'sleep');
   assert.deepEqual(out.mix, DEFAULT_SETTINGS.mix);
@@ -263,4 +264,15 @@ test('a v1 store keeps personal choices and takes the v2 defaults once (Sleep, p
   const again = migrate(JSON.parse(JSON.stringify(out)));
   assert.deepEqual(again, out, 'a v2 store is not reset again');
   assert.equal(migrate({ mix: { master: 0.3 } }).mix.master, 0.3, 'unversioned input is validated, not reset');
+});
+
+test('a v2 store also moves to the v3 defaults once (quieter tone, moderate purr, Play on open)', () => {
+  const v2 = { v: 2, firstRunDone: true, presetId: 'calm', autoplay: false, mix: { master: 0.45, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 } };
+  const out = migrate(v2);
+  assert.equal(out.v, 3);
+  assert.equal(out.firstRunDone, true);
+  assert.equal(out.presetId, 'sleep');
+  assert.equal(out.autoplay, true);
+  assert.deepEqual(out.mix, DEFAULT_SETTINGS.mix);
+  assert.equal(migrate({ ...out, autoplay: false }).autoplay, false, 'a v3 choice to turn autoplay off sticks');
 });

@@ -4,7 +4,7 @@
 export const STORAGE_KEY = 'braintune:settings:v1';
 
 /** Current settings schema version; migrate() always stamps it. */
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 
 /** Default settings, deep-frozen; the store always hands out fresh clones. */
 export const DEFAULT_SETTINGS = deepFreeze({
@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS = deepFreeze({
   listening: 'speakers',
   presetId: 'sleep',
   custom: null,
-  mix: { master: 0.45, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 },
+  mix: { master: 0.45, tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 },
   muted: { tone: false, rain: false, ocean: false, purr: false },
   rainIntensity: 0.35,
   oceanIntensity: 0.35,
@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = deepFreeze({
   shortcuts: true,
   keepAwake: false,
   nightDim: true,
+  autoplay: true,
   session: null,
   hints: { orb: true, sheet: true, stereoCheckDone: false },
 });
@@ -140,6 +141,7 @@ const TOP_RULES = {
   shortcuts: bool,
   keepAwake: bool,
   nightDim: bool,
+  autoplay: bool,
   session,
   hints: shape({ orb: bool, sheet: bool, stereoCheckDone: bool }),
 };
@@ -147,13 +149,13 @@ const TOP_RULES = {
 // --- public API -------------------------------------------------------------
 
 /** Coerces any value into valid settings: unknown keys dropped, numbers clamped, enums checked, version stamped. */
-/** Keys a v1 store keeps when it moves to v2; everything else takes the v2 defaults (Sleep, purr and rain on, low volume, ∞ timer). */
-const KEPT_FROM_V1 = ['firstRunDone', 'listening', 'theme', 'motion', 'scene', 'cats', 'haptics', 'shortcuts', 'keepAwake', 'nightDim', 'hints'];
+/** Keys an older store keeps when it moves to the current version; everything else takes the new defaults (Sleep with a moderate purr, a quiet tone, rain on, low volume, ∞ timer). */
+const KEPT_ACROSS_VERSIONS = ['firstRunDone', 'listening', 'theme', 'motion', 'scene', 'cats', 'haptics', 'shortcuts', 'keepAwake', 'nightDim', 'hints'];
 
-/** Validated settings from any stored value; a v1 store keeps only personal choices so the v2 defaults apply once. */
+/** Validated settings from any stored value; an older versioned store keeps only personal choices so new defaults apply once. */
 export function migrate(raw) {
-  if (isPlainObject(raw) && raw.v === 1) {
-    raw = Object.fromEntries(KEPT_FROM_V1.filter((key) => key in raw).map((key) => [key, raw[key]]));
+  if (isPlainObject(raw) && Number.isInteger(raw.v) && raw.v < SETTINGS_VERSION) {
+    raw = Object.fromEntries(KEPT_ACROSS_VERSIONS.filter((key) => key in raw).map((key) => [key, raw[key]]));
   }
   return validateShape(raw, DEFAULT_SETTINGS, TOP_RULES);
 }

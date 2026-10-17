@@ -78,7 +78,8 @@ test('plan shape: ids count up, enter 600 / exit 500, dwell and speed per pose, 
     assert.ok(['black', 'orangeTabby', 'grey', 'calico'].includes(p.coat));
     assert.ok(p.blinkEveryMs >= 4e3 && p.blinkEveryMs <= 9e3);
     if (p.pose === 'walk') {
-      assert.ok(p.speedPxPerS >= 28 && p.speedPxPerS < 40);
+      const [lo, hi] = p.zoom ? CAT_CONFIG.zoomies.speedPxPerS : CAT_CONFIG.walkSpeedPxPerS;
+      assert.ok(p.speedPxPerS >= lo && p.speedPxPerS < hi, `walk speed ${p.speedPxPerS} (zoom ${p.zoom})`);
       assert.equal(p.dwellMs, Math.round((1000 * (viewport.w + 112)) / p.speedPxPerS));
     } else {
       assert.equal(p.speedPxPerS, null);
@@ -90,7 +91,8 @@ test('plan shape: ids count up, enter 600 / exit 500, dwell and speed per pose, 
   assert.ok(flips > 140 && flips < 260, `flip should be a coin toss, got ${flips}/400`);
   const walker = plans.find((p) => p.pose === 'walk');
   const crossingS = walker.dwellMs / 1000;
-  assert.ok(crossingS > (viewport.w + 112) / 40 - 0.01 && crossingS < (viewport.w + 112) / 28 + 0.01);
+  const [slow, fast] = walker.zoom ? [80, 120] : [28, 40];
+  assert.ok(crossingS > (viewport.w + 112) / fast - 0.01 && crossingS < (viewport.w + 112) / slow + 0.01);
   const stillPlan = createCatScheduler({ rng: mulberry32(5) }).plan({ ...baseCtx, still: true });
   assert.ok(stillPlan.blinkEveryMs >= 8e3 && stillPlan.blinkEveryMs <= 14e3);
 });
@@ -211,4 +213,19 @@ test('companions: a lone cat brings a friend; walkers get a same-direction, slig
   assert.equal(s.companion(s.plan(baseCtx), { ...baseCtx, activeCount: 3 }), null, 'never above the cap');
   const stillLeader = { ...s.plan({ ...baseCtx, still: true }), pose: 'walk', speedPxPerS: 30 };
   assert.notEqual(s.companion(stillLeader, { ...baseCtx, still: true, activeCount: 1 }).pose, 'walk', 'Still mode never sends a chaser');
+});
+
+test('zoomies: some walkers dash at 80–120 px/s, never sleepy ones', () => {
+  const s = createCatScheduler({ rng: mulberry32(21) });
+  let walks = 0;
+  let zooms = 0;
+  for (let i = 0; i < 4000; i++) {
+    const p = s.plan({ ...baseCtx, presetId: 'focus' });
+    if (p.pose !== 'walk') continue;
+    walks += 1;
+    if (p.zoom) zooms += 1;
+  }
+  const share = zooms / walks;
+  assert.ok(share > 0.13 && share < 0.23, `zoomies share ${share}`);
+  for (let i = 0; i < 2000; i++) assert.ok(!s.plan({ ...baseCtx, presetId: 'deep' }).zoom, 'deep sleep cats never dash');
 });

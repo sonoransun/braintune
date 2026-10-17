@@ -2,7 +2,7 @@
 // Cache and storage names carry the braintune- prefix because every project site of one GitHub user shares an origin.
 'use strict';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const CACHE = 'braintune-v' + VERSION;
 const ROOT = new URL('./', self.location).pathname;
 const OFFLINE_MESSAGE = 'Brain Tune is offline and this file is not cached.';

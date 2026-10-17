@@ -20,7 +20,7 @@ const SOUNDING = new Set(['starting', 'playing', 'ambient', 'ending']);
 const PAUSED = new Set(['paused', 'pausing']);
 const CAT_MILESTONES = new Set([1, 10, 25, 50, 100]);
 const THEMES = ['dark', 'light', 'auto'];
-const PRESET_ICONS = { sleep: 'i-moon', rest: 'i-cloud', meditate: 'i-circle', catnap: 'i-paw', calm: 'i-wave', focus: 'i-target', energise: 'i-bolt', clarity: 'i-sparkle' };
+const PRESET_ICONS = { sleep: 'i-moon', deep: 'i-deep', rest: 'i-cloud', meditate: 'i-circle', catnap: 'i-paw', calm: 'i-wave', focus: 'i-target', energise: 'i-bolt', clarity: 'i-sparkle' };
 const FIVE_MIN = 5 * 60000;
 const ONE_MIN = 60000;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -91,6 +91,7 @@ export function mountUI(root, options) {
   // --- session state ----------------------------------------------------------------------------------------
   const returningVisitor = store.get().firstRunDone;
   let engineState = engine ? 'idle' : 'unavailable';
+  let autoPending = false; // Play on open is waiting for the first tap or key press
   let remainingMs = null;
   let timerTotalMs = 0;
   let lastRemaining = Infinity;
@@ -163,8 +164,10 @@ export function mountUI(root, options) {
     hintEl.hidden = !(s.hints.orb && engineState === 'idle');
     sheetHintEl.hidden = !s.hints.sheet;
     restartEl.hidden = !isSounding();
-    overlayEl.hidden = !(engineState === 'blocked' || engineState === 'interrupted');
-    overlayText.textContent = engineState === 'interrupted' ? STRINGS.player.interruptedOverlay : STRINGS.player.blockedOverlay;
+    overlayEl.hidden = !(autoPending || engineState === 'blocked' || engineState === 'interrupted');
+    overlayText.textContent = autoPending
+      ? fill(STRINGS.player.autoplayOverlay, { preset: activePreset(s).name })
+      : engineState === 'interrupted' ? STRINGS.player.interruptedOverlay : STRINGS.player.blockedOverlay;
     attuneButton.disabled = !isSounding() || attuning;
     attuneCancel.hidden = !attuning;
   }
@@ -405,6 +408,7 @@ export function mountUI(root, options) {
   listen($('mode'), 'click', () => setListening(store.get().listening === 'speakers' ? 'headphones' : 'speakers'));
   listen($('stereo-check'), 'click', runStereoCheck);
   const catsSwitch = bindSwitch($('cats-switch'), { onChange: (on) => { buzz('toggle'); store.set('cats.enabled', on); } });
+  const autoplaySwitch = bindSwitch($('autoplay'), { onChange: (on) => { buzz('toggle'); store.set('autoplay', on); } });
   const keepAwake = bindSwitch($('keep-awake'), { onChange: (on) => { buzz('toggle'); store.set('keepAwake', on); } });
   const theme = bindRadioGroup($('theme'), { onChange: (v) => { buzz('tap'); store.set('theme', v); } });
   const prefersStill = () => Boolean(win.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
@@ -414,7 +418,7 @@ export function mountUI(root, options) {
   const nightDimSwitch = bindSwitch($('night-dim'), { onChange: (on) => { buzz('toggle'); store.set('nightDim', on); } });
   const shortcuts = bindSwitch($('shortcuts'), { onChange: (on) => { buzz('toggle'); store.set('shortcuts', on); } });
   listen($('restart-sound'), 'click', () => engine?.rebuild());
-  listen($('overlay-button'), 'click', () => (engineState === 'interrupted' ? continueAfterInterruption() : begin()));
+  listen($('overlay-button'), 'click', () => startPending() || (engineState === 'interrupted' ? continueAfterInterruption() : begin()));
   listen(miniToggle, 'click', onOrbToggle);
   listen($('reset'), 'click', resetAll);
   listen(installButton, 'click', () => {
@@ -489,6 +493,7 @@ export function mountUI(root, options) {
     modeIcon.setAttribute('href', s.listening === 'headphones' ? '#i-headphones' : '#i-speaker');
     stereoRow.hidden = s.listening !== 'headphones';
     catsSwitch.set(s.cats.enabled);
+    autoplaySwitch.set(s.autoplay);
     keepAwake.set(s.keepAwake);
     theme.set(s.theme);
     still.set(s.motion === 'still' || (s.motion === 'auto' && prefersStill()));
@@ -615,7 +620,47 @@ export function mountUI(root, options) {
     if (expanded && store.get().hints.sheet) store.set('hints.sheet', false);
   }));
 
-  const firstRun = createFirstRun($('firstrun'), { onDone: () => orb.focus() });
+  // "Let's begin" is a tap, so with Play on open the first session starts right from it.
+  const firstRun = createFirstRun($('firstrun'), {
+    onDone: ({ accepted } = {}) => {
+      orb.focus();
+      if (accepted && store.get().autoplay) begin();
+    },
+  });
+
+  /**
+   * Play on open. Browsers start audio only after a user gesture unless their autoplay policy says otherwise, so:
+   * where the documented Autoplay Policy Detection API reports 'allowed', start at once; everywhere else show a
+   * full-screen "Tap anywhere to start Sleep" layer, and the first tap or key press starts the session (a real gesture).
+   */
+  function autoStart() {
+    if (!engine || engineState !== 'idle') return false;
+    if (win.navigator?.getAutoplayPolicy?.('audiocontext') === 'allowed') {
+      begin();
+      return true;
+    }
+    autoPending = true;
+    doc.addEventListener('keydown', startFromKey, { capture: true });
+    render();
+    return true;
+  }
+
+  function startFromKey(event) {
+    if (event.key === 'Tab' || event.key === 'Escape' || event.metaKey || event.ctrlKey || event.altKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    startPending();
+  }
+
+  /** The waiting autoplay starts from this gesture; returns false when nothing was waiting. */
+  function startPending() {
+    if (!autoPending) return false;
+    autoPending = false;
+    doc.removeEventListener('keydown', startFromKey, { capture: true });
+    begin();
+    render();
+    return true;
+  }
 
   if (engine) {
     disposers.push(engine.on('state', ({ state }) => setEngineState(state)));
@@ -648,7 +693,7 @@ export function mountUI(root, options) {
   // --- start ------------------------------------------------------------------------------------------------
   syncAll(store.get());
   if (!engine) setControlsDisabled(true);
-  if (!firstRun.showIfNeeded(store)) offerResume();
+  if (!firstRun.showIfNeeded(store) && !(store.get().autoplay && autoStart())) offerResume();
 
   return {
     /** Cats: milestone toasts at 1, 10, 25, 50 and 100 spotted. */

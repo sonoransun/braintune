@@ -21,6 +21,17 @@ const PLACE_MARGIN_PX = 8;
 const TAP_SLOP_PX = 8;
 const PET_GAP_MS = 350; // one pet per 350 ms per cat keeps the one-shots under 3/s (§7.9)
 const BLINK_MS = 180;
+// Fidgets: one small one-shot action every few seconds keeps settled cats alive (look, flick, ear, stretch, groom),
+// and now and then a pounce to a new spot along the ledge. Sleepers only twitch an ear.
+const FIDGET_EVERY_MS = [2800, 6500];
+const FIDGET_MS = { look: 1600, flick: 900, ear: 500, stretch: 1400, groom: 1800, pounce: 700 };
+const FIDGETS = {
+  sit: { look: 3, flick: 3, ear: 2, stretch: 1, groom: 2, pounce: 2 },
+  loaf: { look: 3, flick: 2, ear: 2, stretch: 1, pounce: 1 },
+  sleep: { ear: 3, stretch: 1 },
+};
+const STILL_FIDGETS = new Set(['ear']); // Still mode: no travel, no big movements
+const POUNCE_ARC_PX = 26;
 const TILT_MS = 400;
 const HAPPY_MS = 1200;
 const PURR_LABEL_MS = 2000;
@@ -245,6 +256,7 @@ export function createCats(layerEl, deps) {
     el.dataset.pose = plan.pose;
     el.dataset.coat = plan.coat;
     if (plan.frolic) el.dataset.frolic = 'true';
+    if (plan.zoom) el.dataset.zoom = 'true';
     el.setAttribute('aria-label', catLabel(plan.pose, plan.coat));
     el.innerHTML = catSvg({ pose: plan.pose, coat: plan.coat, flip: plan.flip });
     addHappyEyes(el);
@@ -261,7 +273,7 @@ export function createCats(layerEl, deps) {
     const cat = {
       plan, pose: plan.pose, coat: plan.coat, flip: plan.flip, size,
       el: buildElement(plan, size), x: 0, y: 0, exiting: false, petted: false, lastPetAt: -Infinity,
-      dwell: null, blink: null, walk: null, label: null,
+      dwell: null, blink: null, walk: null, label: null, fidget: null, act: null,
     };
     moveTo(cat, spot.x, spot.y);
     cats.push(cat);
@@ -269,9 +281,58 @@ export function createCats(layerEl, deps) {
     void cat.el.offsetWidth; // commit the hidden start state so the entrance transition runs
     cat.el.classList.add('is-present');
     if (plan.pose === 'walk') startWalk(cat);
-    else cat.dwell = after(plan.dwellMs, () => exitCat(cat));
+    else {
+      cat.dwell = after(plan.dwellMs, () => exitCat(cat));
+      scheduleFidget(cat);
+    }
     scheduleBlink(cat);
     return cat;
+  }
+
+  // --- fidgets and pounces --------------------------------------------------------------------------------------
+
+  function scheduleFidget(cat) {
+    cat.fidget = after(randRange(rng, ...FIDGET_EVERY_MS), () => {
+      if (cat.exiting) return;
+      fidget(cat);
+      scheduleFidget(cat);
+    });
+  }
+
+  function pickFidget(cat) {
+    const table = Object.entries(FIDGETS[cat.pose] ?? {}).filter(([act]) => !still() || STILL_FIDGETS.has(act));
+    const total = table.reduce((sum, [, w]) => sum + w, 0);
+    let r = rng() * total;
+    for (const [act, weight] of table) if ((r -= weight) < 0) return act;
+    return null;
+  }
+
+  function fidget(cat) {
+    const act = pickFidget(cat);
+    if (!act || cat.el.dataset.act) return;
+    if (act === 'pounce' && !pounce(cat)) return;
+    cat.el.dataset.act = act;
+    cat.act = after(FIDGET_MS[act], () => {
+      cat.act = null;
+      delete cat.el.dataset.act;
+    });
+  }
+
+  /** A short leap along the ledge to another free spot (arc via the Web Animations API, transform only). */
+  function pounce(cat) {
+    const spot = findSpot(cat.plan, cat);
+    if (!spot || Math.abs(spot.x - cat.x) < 24) return false;
+    const reach = Math.sign(spot.x - cat.x) * Math.min(Math.abs(spot.x - cat.x), 180);
+    const x1 = cat.x + reach;
+    const target = { x: x1, y: spot.y, w: cat.size.w, h: aboveLedge(cat.size) };
+    if ([...getAvoidRects(), ...occupiedRects(cat)].some((r) => rectsIntersect(target, r, PLACE_MARGIN_PX))) return false;
+    const from = `translate(${Math.round(cat.x)}px, ${Math.round(cat.y)}px)`;
+    const mid = `translate(${Math.round(cat.x + reach / 2)}px, ${Math.round(cat.y - POUNCE_ARC_PX)}px)`;
+    const to = `translate(${Math.round(x1)}px, ${Math.round(spot.y)}px)`;
+    const jump = cat.el.animate([{ transform: from }, { transform: mid, easing: 'ease-in' }, { transform: to }], { duration: FIDGET_MS.pounce, easing: 'ease-out' });
+    moveTo(cat, x1, spot.y);
+    jump.onfinish = () => jump.cancel();
+    return true;
   }
 
   function walkKeyframes(cat) {
@@ -306,6 +367,8 @@ export function createCats(layerEl, deps) {
     cat.exiting = true;
     drop(cat.dwell);
     drop(cat.blink);
+    drop(cat.fidget);
+    drop(cat.act);
     blurIfFocused(cat.el);
     cat.el.classList.remove('is-present');
     cat.el.classList.add('is-exiting');
@@ -315,7 +378,7 @@ export function createCats(layerEl, deps) {
   function removeCat(cat) {
     const index = cats.indexOf(cat);
     if (index >= 0) cats.splice(index, 1);
-    for (const timer of [cat.dwell, cat.blink, cat.label]) drop(timer);
+    for (const timer of [cat.dwell, cat.blink, cat.label, cat.fidget, cat.act]) drop(timer);
     cat.walk?.cancel();
     blurIfFocused(cat.el);
     cat.el.remove();

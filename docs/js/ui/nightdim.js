@@ -2,7 +2,7 @@
 // activity; never while a panel control has focus or a dialog is open; any activity restores within 300 ms (CSS).
 
 const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'focusin', 'touchstart', 'selectionchange'];
-const ELIGIBLE_PRESETS = new Set(['sleep', 'rest']);
+const ELIGIBLE_PRESETS = new Set(['sleep', 'deep', 'rest']);
 
 /** Creates the night-dim controller for the <html> element. */
 export function createNightDim({

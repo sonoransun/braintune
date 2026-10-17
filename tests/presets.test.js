@@ -4,7 +4,7 @@ import { PRESETS, TIMER_OPTIONS, DEFAULT_PRESET_ID, getPreset, validatePreset, r
 import { gateParams } from '../docs/js/core/gate.js';
 import { CARRIER_RANGE } from '../docs/js/core/entrainment.js';
 
-const IDS = ['sleep', 'rest', 'meditate', 'catnap', 'calm', 'focus', 'energise', 'clarity'];
+const IDS = ['sleep', 'deep', 'rest', 'meditate', 'catnap', 'calm', 'focus', 'energise', 'clarity'];
 const DEVICES = ['phone', 'desktop'];
 const RESOLVED_KEYS = [
   'beatHz', 'carrierHz', 'catMood', 'chime', 'endFadeSeconds', 'gate', 'glide', 'id', 'mix', 'mode',
@@ -17,9 +17,9 @@ const rejects = (preset, fragment) => {
   assert.ok(errors.some((e) => e.includes(fragment)), `no error mentions ${fragment}: ${errors.join(' | ')}`);
 };
 
-test('eight presets in display order, every one valid, unique ids, names of at most 14 characters', () => {
+test('nine presets in display order, every one valid, unique ids, names of at most 14 characters', () => {
   assert.deepEqual(PRESETS.map((p) => p.id), IDS);
-  assert.deepEqual(PRESETS.map((p) => p.name), ['Sleep', 'Rest', 'Meditate', 'Cat nap', 'Calm', 'Focus', 'Energise', 'Clarity']);
+  assert.deepEqual(PRESETS.map((p) => p.name), ['Sleep', 'Deep sleep', 'Rest', 'Meditate', 'Cat nap', 'Calm', 'Focus', 'Energise', 'Clarity']);
   for (const p of PRESETS) assert.deepEqual(validatePreset(p), { ok: true, errors: [] }, p.id);
   assert.equal(new Set(PRESETS.map((p) => p.id)).size, PRESETS.length);
   for (const p of PRESETS) assert.ok(p.name.length <= 14, p.name);
@@ -35,11 +35,13 @@ test('TIMER_OPTIONS, DEFAULT_PRESET_ID and getPreset', () => {
 });
 
 test('table values match §6.5', () => {
-  const [sleep, rest, meditate, catnap, calm, focus, energise, clarity] = PRESETS;
+  const [sleep, deep, rest, meditate, catnap, calm, focus, energise, clarity] = PRESETS;
+  assert.deepEqual([deep.band, deep.beatHz, deep.glide, deep.carrierHz, deep.timbre, deep.pad, deep.mix, deep.rainIntensity, deep.oceanIntensity, deep.timerMinutes, deep.catMood],
+    ['delta', 1, { fromHz: 3, minutes: 20 }, { headphones: 110, speakers: 180 }, 'velvet', true, { tone: 0.3, rain: 0.65, ocean: 0.6, purr: 0.45 }, 0.25, 0.25, 0, 'sleepy']);
   assert.deepEqual(sleep, {
     id: 'sleep', name: 'Sleep', band: 'delta', beatHz: 2, glide: { fromHz: 6, minutes: 12 },
     carrierHz: { headphones: 200, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 }, rainIntensity: 0.35, oceanIntensity: 0.35,
+    mix: { tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 }, rainIntensity: 0.35, oceanIntensity: 0.35,
     timerMinutes: 0, endFadeSeconds: 90, chime: 'none',
   });
   assert.deepEqual([rest.band, rest.beatHz, rest.carrierHz, rest.mix, rest.rainIntensity, rest.oceanIntensity, rest.timerMinutes, rest.endFadeSeconds, rest.chime],
@@ -56,7 +58,7 @@ test('table values match §6.5', () => {
     ['beta', 20, { headphones: 400, speakers: 640 }, 'warm', false, { tone: 0.6, rain: 0.6, ocean: 0.65, purr: 0.4 }, 0.55, 0.6, 0, 20, 'soft']);
   assert.deepEqual([clarity.band, clarity.beatHz, clarity.carrierHz, clarity.timbre, clarity.pad, clarity.mix, clarity.rainIntensity, clarity.timerMinutes, clarity.endFadeSeconds, clarity.chime, clarity.forceMode],
     ['gamma', 40, { headphones: 400, speakers: 520 }, 'warm', false, { tone: 0.55, rain: 0.7, ocean: 0, purr: 0.4 }, 0.45, 0, 30, 'soft', 'isochronic']);
-  assert.ok(PRESETS.filter((p) => p.pad).map((p) => p.id).join() === 'sleep,rest,meditate,catnap,calm');
+  assert.ok(PRESETS.filter((p) => p.pad).map((p) => p.id).join() === 'sleep,deep,rest,meditate,catnap,calm');
   assert.ok(PRESETS.filter((p) => p.chime === 'soft').map((p) => p.id).join() === 'meditate,focus,energise,clarity');
 });
 
@@ -114,17 +116,18 @@ test('every preset purrs and plays until stopped; Cat nap purrs most and is the 
   assert.equal(Math.max(...PRESETS.map((p) => p.mix.purr)), getPreset('catnap').mix.purr);
   assert.equal(getPreset('catnap').catMood, 'sleepy');
   assert.equal(resolvePreset(getPreset('catnap'), { listening: 'speakers', device: 'phone' }).catMood, 'sleepy');
-  for (const p of PRESETS) if (p.id !== 'catnap') assert.equal(resolvePreset(p, { listening: 'speakers', device: 'phone' }).catMood, null, p.id);
+  for (const p of PRESETS) if (!['catnap', 'deep'].includes(p.id)) assert.equal(resolvePreset(p, { listening: 'speakers', device: 'phone' }).catMood, null, p.id);
 });
 
-test('Sleep glides from 6 Hz to 2 Hz over 12 minutes; no other preset glides', () => {
+test('Sleep glides from 6 Hz to 2 Hz over 12 minutes, Deep sleep from 3 Hz to 1 Hz over 20; no other preset glides', () => {
+  assert.deepEqual(getPreset('deep').glide, { fromHz: 3, minutes: 20 });
   const sleep = getPreset('sleep');
   assert.equal(sleep.beatHz, 2);
   assert.deepEqual(sleep.glide, { fromHz: 6, minutes: 12 });
   const r = resolvePreset(sleep, { listening: 'headphones', device: 'phone' });
   assert.deepEqual(r.glide, { fromHz: 6, minutes: 12 });
   assert.notEqual(r.glide, sleep.glide, 'resolved glide is a copy');
-  for (const p of PRESETS) if (p.id !== 'sleep') assert.equal(resolvePreset(p, { listening: 'headphones', device: 'phone' }).glide, null, p.id);
+  for (const p of PRESETS) if (!['sleep', 'deep'].includes(p.id)) assert.equal(resolvePreset(p, { listening: 'headphones', device: 'phone' }).glide, null, p.id);
 });
 
 test('speakers on a phone always get a carrier of at least 400 Hz; headphones get binaural at the headphones carrier', () => {
@@ -132,8 +135,8 @@ test('speakers on a phone always get a carrier of at least 400 Hz; headphones ge
     for (const device of DEVICES) {
       const spk = resolvePreset(p, { listening: 'speakers', device });
       assert.equal(spk.mode, 'isochronic', `${p.id} speakers ${device}`);
-      assert.ok(spk.carrierHz >= 400, `${p.id} speakers ${device} carrier ${spk.carrierHz}`);
-      assert.equal(spk.carrierHz, p.carrierHz.speakers);
+      // Phones lift every speaker carrier to 400 Hz; desktop speakers keep Deep sleep's low 180 Hz.
+      assert.equal(spk.carrierHz, device === 'phone' ? Math.max(400, p.carrierHz.speakers) : p.carrierHz.speakers, `${p.id} speakers ${device}`);
       const hp = resolvePreset(p, { listening: 'headphones', device });
       if (p.id === 'clarity') continue;
       assert.equal(hp.mode, 'binaural', `${p.id} headphones ${device}`);

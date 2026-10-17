@@ -377,3 +377,74 @@ html[data-motion="still"] .toon.is-active .toon__cat { animation: none; }
   from { translate: 0 0; }
   to { translate: -36px 0; }
 }
+
+/* --- livelier visitors: one-shot fidgets (cats.js sets data-act), zoomies, background cat actions ------------- */
+
+.cat__ear { transform-box: fill-box; transform-origin: 50% 100%; }
+
+.cat[data-act="look"] .cat__head { animation: cat-look 1.6s var(--ease-breath, ease-in-out); }
+.cat[data-act="groom"] .cat__head { animation: cat-groom 1.8s ease-in-out; }
+.cat[data-act="flick"] .cat__tail { animation: cat-flick 0.9s ease-out; }
+.cat[data-act="ear"] .cat__ear--l { animation: cat-ear 0.5s ease-out; }
+.cat[data-act="stretch"] .cat__svg { animation: cat-stretch 1.4s var(--ease-breath, ease-in-out); transform-origin: 50% 100%; }
+
+.cat[data-zoom] .cat__leg { animation-duration: 0.45s; }
+.cat[data-zoom] .cat__body,
+.cat[data-zoom] .cat__markings:not(.cat__markings--head) { animation-duration: 0.45s; }
+
+html[data-motion="still"] .cat[data-act] .cat__head,
+html[data-motion="still"] .cat[data-act] .cat__tail,
+html[data-motion="still"] .cat[data-act] .cat__svg { animation: none; }
+
+@keyframes cat-look {
+  0%, 100% { rotate: 0deg; }
+  30% { rotate: -12deg; }
+  70% { rotate: 9deg; }
+}
+
+@keyframes cat-groom {
+  0%, 100% { rotate: 0deg; translate: 0 0; }
+  25%, 75% { rotate: 14deg; translate: 0 3px; }
+  50% { rotate: 10deg; translate: 0 4px; }
+}
+
+@keyframes cat-flick {
+  0%, 100% { rotate: 0deg; }
+  35% { rotate: 22deg; }
+  65% { rotate: -8deg; }
+}
+
+@keyframes cat-ear {
+  0%, 100% { rotate: 0deg; }
+  40% { rotate: -18deg; }
+}
+
+@keyframes cat-stretch {
+  0%, 100% { scale: 1 1; }
+  45% { scale: 1.1 0.9; }
+}
+
+.toon__cat[data-act="hop"] .toon__svg { animation: toon-hop 1.1s ease-out; }
+.toon__cat[data-act="stretch"] .toon__svg { animation: toon-stretch 1.6s var(--ease-breath, ease-in-out); transform-origin: 50% 100%; }
+.toon__cat[data-act="pounce"] .toon__svg { animation: toon-pounce 1.2s ease-in-out; }
+
+html[data-motion="still"] .toon__cat[data-act] .toon__svg { animation: none; }
+
+@keyframes toon-hop {
+  0%, 100% { translate: 0 0; scale: 1 1; }
+  15% { translate: 0 0; scale: 1.06 0.92; }
+  45% { translate: 0 -34px; scale: 0.96 1.05; }
+  80% { translate: 0 0; scale: 1.05 0.94; }
+}
+
+@keyframes toon-stretch {
+  0%, 100% { scale: 1 1; }
+  50% { scale: 1.12 0.9; }
+}
+
+@keyframes toon-pounce {
+  0%, 100% { translate: 0 0; }
+  30% { translate: 10px 4px; }
+  55% { translate: -26px -18px; }
+  75% { translate: -18px 0; }
+}

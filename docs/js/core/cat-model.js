@@ -15,6 +15,7 @@ export const CAT_CONFIG = deepFreeze({
   gapMs: { playing: [20e3, 60e3], idle: [40e3, 100e3] },
   dwellMs: { sit: [25e3, 60e3], loaf: [30e3, 70e3], sleep: [60e3, 180e3] },
   walkSpeedPxPerS: [28, 40],
+  zoomies: { chance: 0.18, speedPxPerS: [80, 120] }, // now and then a walker dashes across instead
   poseWeights: {
     sleepy: { sleep: 0.3, loaf: 0.2, sit: 0.1, walk: 0.4 },
     calm: { sit: 0.3, loaf: 0.25, walk: 0.45 },
@@ -34,7 +35,7 @@ const NARROW_BELOW_PX = 400;
 const WALK_CROSSING_EXTRA_PX = 112; // off-screen start to off-screen end adds one cat width
 const ENTER_MS = 600;
 const EXIT_MS = 500;
-const SLEEPY_PRESETS = new Set(['sleep', 'rest', 'catnap']);
+const SLEEPY_PRESETS = new Set(['sleep', 'deep', 'rest', 'catnap']);
 const ALERT_PRESETS = new Set(['focus', 'energise', 'clarity']);
 
 /** Scheduler → { nextArrivalDelay, mood, plan, companion(leader, ctx), companionDelay(activeCount) }. */
@@ -67,12 +68,13 @@ export function createCatScheduler({ rng, config = CAT_CONFIG }) {
     const pose = pickWeighted(config.poseWeights[currentMood], rng());
     const coat = pickWeighted(config.coatWeights, rng());
     const flip = rng() < 0.5;
-    const speedPxPerS = pose === 'walk' ? draw(config.walkSpeedPxPerS) : null;
+    const zoom = pose === 'walk' && currentMood !== 'sleepy' && rng() < config.zoomies.chance;
+    const speedPxPerS = pose === 'walk' ? draw(zoom ? config.zoomies.speedPxPerS : config.walkSpeedPxPerS) : null;
     const dwellMs = pose === 'walk'
       ? Math.round((1000 * (viewport.w + WALK_CROSSING_EXTRA_PX)) / speedPxPerS)
       : Math.round(draw(config.dwellMs[pose]));
     const blinkEveryMs = Math.round(draw(currentMood === 'still' ? config.blinkEveryStillMs : config.blinkEveryMs));
-    return { id: nextId++, pose, coat, flip, dwellMs, enterMs: ENTER_MS, exitMs: EXIT_MS, speedPxPerS, blinkEveryMs };
+    return { id: nextId++, pose, coat, flip, dwellMs, enterMs: ENTER_MS, exitMs: EXIT_MS, speedPxPerS, blinkEveryMs, zoom };
   }
 
   /** A companion for `leader`: walkers get a chaser (same direction, a touch faster, another coat); sitters a neighbour. */

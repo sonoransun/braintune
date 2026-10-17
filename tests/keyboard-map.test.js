@@ -15,9 +15,8 @@ test('Space and K toggle play only when focus is not interactive', () => {
   assert.equal(mapKeyToAction(key('m'), { ...ON, focusIsInteractive: true }), 'mute', 'other keys still work on interactive focus');
 });
 
-test('digits 1-8 select presets', () => {
-  for (let n = 1; n <= 8; n += 1) assert.equal(mapKeyToAction(key(String(n)), ON), `preset:${n}`);
-  assert.equal(mapKeyToAction(key('9'), ON), null);
+test('digits 1-9 select presets', () => {
+  for (let n = 1; n <= 9; n += 1) assert.equal(mapKeyToAction(key(String(n)), ON), `preset:${n}`);
   assert.equal(mapKeyToAction(key('0'), ON), null);
   assert.equal(mapKeyToAction(key('12'), ON), null);
 });

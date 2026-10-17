@@ -8,6 +8,9 @@ const HEIGHT_OF_STAGE = 0.34;
 const MIN_HEIGHT_PX = 110;
 const MAX_HEIGHT_PX = 280;
 const MAX_WIDTH_OF_STAGE = 0.36;
+// Every few seconds one background cat hops, stretches or pounces (one-shot; never in Still mode).
+const ACTION_EVERY_MS = [3500, 7500];
+const ACTION_MS = 1600;
 const FADE_MS = 2500; // matches --t-scene; a fully faded layer is rebuilt with new cats for the next purr
 
 /** createToonLayer(layerEl, { rng }) → { setActive, setStageRect, setVisible, destroy }. */
@@ -18,6 +21,7 @@ export function createToonLayer(layerEl, { rng = Math.random } = {}) {
   let cats = [];
   let rebuildTimer = null;
   let serial = 0;
+  let actionTimer = null;
 
   const pick = (list, not = []) => {
     const pool = list.filter((item) => !not.includes(item));
@@ -69,9 +73,27 @@ export function createToonLayer(layerEl, { rng = Math.random } = {}) {
     }
   }
 
+  function scheduleAction() {
+    clearTimeout(actionTimer);
+    actionTimer = setTimeout(() => {
+      act();
+      scheduleAction();
+    }, ACTION_EVERY_MS[0] + rng() * (ACTION_EVERY_MS[1] - ACTION_EVERY_MS[0]));
+  }
+
+  function act() {
+    if (document.documentElement.dataset.motion === 'still' || document.hidden || cats.length === 0) return;
+    const cat = cats[Math.floor(rng() * cats.length) % cats.length];
+    const moves = cat.variant === 'play' ? ['pounce', 'pounce', 'hop', 'stretch'] : ['hop', 'stretch', 'stretch'];
+    cat.el.dataset.act = moves[Math.floor(rng() * moves.length) % moves.length];
+    setTimeout(() => delete cat.el.dataset.act, ACTION_MS);
+  }
+
   function render() {
     const on = active && visible;
     layerEl.classList.toggle('is-active', on);
+    if (on) scheduleAction();
+    else clearTimeout(actionTimer);
     clearTimeout(rebuildTimer);
     // Once fully faded out, choose new cats so each purr brings different company.
     if (!on && cats.length) rebuildTimer = setTimeout(() => !active && build(), FADE_MS + 100);
@@ -97,6 +119,7 @@ export function createToonLayer(layerEl, { rng = Math.random } = {}) {
     },
     destroy() {
       clearTimeout(rebuildTimer);
+      clearTimeout(actionTimer);
       layerEl.replaceChildren();
       cats = [];
     },

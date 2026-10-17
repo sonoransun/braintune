@@ -194,7 +194,7 @@ test('every preset at its quiet v2 defaults sits inside the windows (§6.6 shift
       for (const device of DEVICES) {
         const b = budgetFor(preset, listening, device);
         const where = `${preset.id} / ${listening} / ${device}`;
-        assert.ok(b.toneDbfsPeak >= -36 && b.toneDbfsPeak <= -26, `${where} tone peak ${b.toneDbfsPeak}`);
+        assert.ok(b.toneDbfsPeak >= -42 && b.toneDbfsPeak <= -26, `${where} tone peak ${b.toneDbfsPeak}`);
         if (preset.mix.rain > 0) assert.ok(b.rainDbfsRms >= -48 && b.rainDbfsRms <= -32, `${where} rain ${b.rainDbfsRms}`);
         if (preset.mix.ocean > 0) {
           assert.ok(b.oceanCrestDbfsPeak >= -40 && b.oceanCrestDbfsPeak <= -26, `${where} ocean crest ${b.oceanCrestDbfsPeak}`);

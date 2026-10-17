@@ -33,6 +33,7 @@
   <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="4" y="13" width="4" height="6" rx="1.5"/><rect x="16" y="13" width="4" height="6" rx="1.5"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5.5v13"/><path d="M16 5.5v13"/></symbol>
+  <symbol id="i-deep" viewBox="0 0 24 24"><path d="M15.5 10.5A5 5 0 0 1 9 4a5.5 5.5 0 1 0 6.5 6.5z"/><path d="M3 18c2 0 2-1.5 4.5-1.5S10 18 12 18s2.5-1.5 4.5-1.5S19 18 21 18"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
   <symbol id="i-paw" viewBox="0 0 24 24"><circle cx="7" cy="9" r="1.6"/><circle cx="11" cy="6" r="1.6"/><circle cx="15.5" cy="6.5" r="1.6"/><circle cx="18.5" cy="10" r="1.6"/><path d="M12.5 11c-3 0-5.5 2.6-5.5 5 0 1.5 1 2.5 2.4 2.5 1.2 0 2-.8 3.1-.8s1.9.8 3.1.8c1.4 0 2.4-1 2.4-2.5 0-2.4-2.5-5-5.5-5z"/></symbol>
@@ -258,6 +259,14 @@
           <button type="button" class="switch" id="cats-switch" role="switch" aria-checked="true" aria-labelledby="cats-label" aria-describedby="cats-desc"><span class="switch__knob"></span></button>
         </div>
 
+        <div class="setting">
+          <div class="setting__text">
+            <span class="setting__label" id="autoplay-label">Play on open</span>
+            <span class="setting__desc" id="autoplay-desc">Starts Sleep as soon as Brain Tune opens. Some browsers wait for a first tap.</span>
+          </div>
+          <button type="button" class="switch" id="autoplay" role="switch" aria-checked="true" aria-labelledby="autoplay-label" aria-describedby="autoplay-desc"><span class="switch__knob"></span></button>
+        </div>
+
         <div class="setting" id="keep-awake-row" hidden>
           <div class="setting__text">
             <span class="setting__label" id="keep-awake-label">Keep screen awake</span>
@@ -300,7 +309,7 @@
         <div class="setting">
           <div class="setting__text">
             <span class="setting__label" id="night-dim-label">Night dim</span>
-            <span class="setting__desc" id="night-dim-desc">During Sleep and Rest, the screen dims after a minute of quiet.</span>
+            <span class="setting__desc" id="night-dim-desc">During Sleep, Deep sleep and Rest, the screen dims after a minute of quiet.</span>
           </div>
           <button type="button" class="switch" id="night-dim" role="switch" aria-checked="true" aria-labelledby="night-dim-label" aria-describedby="night-dim-desc"><span class="switch__knob"></span></button>
         </div>
@@ -308,7 +317,7 @@
         <div class="setting">
           <div class="setting__text">
             <span class="setting__label" id="shortcuts-label">Keyboard shortcuts</span>
-            <span class="setting__desc" id="shortcuts-desc">Space or K plays and pauses. 1 to 8 pick a preset. M mutes, H switches listening, T changes the theme, C calls a cat, ? opens About.</span>
+            <span class="setting__desc" id="shortcuts-desc">Space or K plays and pauses. 1 to 9 pick a preset. M mutes, H switches listening, T changes the theme, C calls a cat, ? opens About.</span>
           </div>
           <button type="button" class="switch" id="shortcuts" role="switch" aria-checked="true" aria-labelledby="shortcuts-label" aria-describedby="shortcuts-desc"><span class="switch__knob"></span></button>
         </div>

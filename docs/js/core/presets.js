@@ -22,14 +22,23 @@ const CHIMES = ['none', 'soft'];
 const CAT_MOODS = ['sleepy', 'calm', 'alert'];
 const LAYERS = ['tone', 'rain', 'ocean', 'purr'];
 
-/** The eight presets in display order; carriers are headphones and speakers values. Every preset purrs and plays until stopped (timer ∞). */
+/** The nine presets in display order; carriers are headphones and speakers values. Every preset purrs and plays until stopped (timer ∞). */
 export const PRESETS = deepFreeze([
   {
     id: 'sleep', name: 'Sleep', band: 'delta', beatHz: 2, glide: { fromHz: 6, minutes: 12 },
     carrierHz: { headphones: 200, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 },
+    mix: { tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 },
     rainIntensity: 0.35, oceanIntensity: 0.35,
     timerMinutes: 0, endFadeSeconds: 90, chime: 'none',
+  },
+  {
+    // Extra-low deep sleep: a 1 Hz beat reached by a slow glide from 3 Hz, on the lowest carrier binaural allows,
+    // with the pad's sub an octave below (55 Hz). Speakers on phones still lift the carrier to 400 Hz to be heard.
+    id: 'deep', name: 'Deep sleep', band: 'delta', beatHz: 1, glide: { fromHz: 3, minutes: 20 },
+    carrierHz: { headphones: 110, speakers: 180 }, timbre: 'velvet', pad: true,
+    mix: { tone: 0.3, rain: 0.65, ocean: 0.6, purr: 0.45 },
+    rainIntensity: 0.25, oceanIntensity: 0.25,
+    timerMinutes: 0, endFadeSeconds: 90, chime: 'none', catMood: 'sleepy',
   },
   {
     id: 'rest', name: 'Rest', band: 'delta', beatHz: 3.5,
