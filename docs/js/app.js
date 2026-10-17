@@ -95,11 +95,12 @@ async function main() {
   scheduleWorkerRegistration(() => ui?.toaster);
   const store = createStore(safeStorage(), { debounceMs: 250, setTimer, clearTimer });
   const mq = Object.fromEntries(Object.entries(QUERIES).map(([name, query]) => [name, matchMedia(query)]));
-  const [{ createEngine } = {}, lifecycle = {}, { createScene } = {}, { createCats } = {}] = await Promise.all([
+  const [{ createEngine } = {}, lifecycle = {}, { createScene } = {}, { createCats } = {}, { createToonLayer } = {}] = await Promise.all([
     import('./audio/engine.js').catch(() => ({})),
     import('./audio/lifecycle.js').catch(() => ({})),
     import('./scene/scene.js').catch(() => ({})),
     import('./cats/cats.js').catch(() => ({})),
+    import('./cats/toon.js').catch(() => ({})),
   ]);
   const platform = guard('detectPlatform', () => lifecycle.detectPlatform?.(), null) ?? fallbackPlatform();
   const rng = mulberry32((Date.now() ^ Math.floor(Math.random() * 2 ** 31)) >>> 0);
@@ -136,6 +137,14 @@ async function main() {
       onPet: (total) => ui?.onPet(total),
     }))
     : null;
+  const toon = createToonLayer && $('toon') ? guard('createToonLayer', () => createToonLayer($('toon'), { rng })) : null;
+
+  /** The scene, and the cell-shaded cats behind the controls, compose into the visible stage. */
+  function setStage() {
+    const rect = sheet.stageRect();
+    scene?.setStageRect(rect);
+    toon?.setStageRect(rect);
+  }
 
   // --- store → everything ------------------------------------------------------------------------------------
   function applyAttributes(s) {
@@ -194,6 +203,8 @@ async function main() {
   }
 
   function applyCats(s) {
+    // Cell-shaded cats frolic in the background whenever a purr is audible.
+    toon?.setActive(playing && s.cats.enabled && !s.muted.purr && s.mix.purr > 0 && s.mix.master > 0);
     if (!cats) return;
     cats.setEnabled(s.cats.enabled);
     cats.setContext({ playing, band: settingsBand(s), purr: s.muted.purr ? 0 : s.mix.purr, presetId: s.presetId });
@@ -224,15 +235,16 @@ async function main() {
     root.dataset.pointer = mq.coarse.matches ? 'coarse' : 'fine';
     sheet.refresh();
     scene?.resize();
-    scene?.setStageRect(sheet.stageRect());
+    setStage();
     cats?.onLayoutChange();
     syncSceneRunning();
   }
   let resizeHandle = null;
   let scrollFrame = 0;
   sheet.onChange((expanded) => {
-    scene?.setStageRect(sheet.stageRect());
+    setStage();
     cats?.setVisible(!expanded);
+    toon?.setVisible(!expanded);
     syncSceneRunning();
   });
   window.addEventListener('resize', () => {
@@ -243,7 +255,7 @@ async function main() {
     if (scrollFrame) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = 0;
-      scene?.setStageRect(sheet.stageRect());
+      setStage();
     });
   }, { passive: true });
   mq.desktop.addEventListener('change', relayout);
@@ -272,7 +284,7 @@ async function main() {
   applyIntensities(initial);
   applyMotion(initial);
   applyCats(initial);
-  scene?.setStageRect(sheet.stageRect());
+  setStage();
   syncSceneRunning();
   cats?.start();
   root.dataset.ready = 'true';
@@ -293,7 +305,7 @@ async function main() {
       frameRate: () => scene?.frameRate() ?? 0,
       luminanceTrace: (seconds) => scene?.luminanceTrace(seconds) ?? Promise.resolve(null),
     },
-    cats: { spawnNow: (pose, coat) => cats?.spawnNow(pose, coat) },
+    cats: { toonActive: () => document.getElementById('toon')?.classList.contains('is-active') ?? false, spawnNow: (pose, coat) => cats?.spawnNow(pose, coat) },
     audit: { touchTargets },
   };
 }

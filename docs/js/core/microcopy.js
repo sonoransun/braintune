@@ -75,7 +75,7 @@ export const STRINGS = deepFreeze({
     presetShift: 'Shifting to {preset}…',
     listeningSpeakers: 'Switched to speakers — using a soft pulsing tone.',
     listeningHeadphones: 'Switched to headphones — using binaural tones.',
-    timerSet: 'Timer set to {minutes} minutes.',
+    timerSet: 'Timer set to {minutes}.',
     timerSetOne: 'Timer set to 1 minute.',
     timerOff: 'Timer off.',
     offlineReady: 'Brain Tune works offline now.',
@@ -162,6 +162,8 @@ export const STRINGS = deepFreeze({
     infiniteLabel: 'No timer',
     custom: 'Custom',
     minutes: '{n} min',
+    hours: '{n} h',
+    hoursMinutes: '{h} h {m} min',
     left: '{time} left',
     after: { label: 'After the timer', stop: 'Fade out', ambient: 'Keep rain and ocean' },
     endFade: 'End fade',
@@ -250,7 +252,12 @@ export function formatTimeLeft(ms) {
 
 /** 20 → '20 min'; a non-finite count reads as the no-timer glyph. */
 export function formatMinutes(n) {
-  return Number.isFinite(n) ? fill(STRINGS.timer.minutes, { n: Math.round(n) }) : STRINGS.timer.infinite;
+  if (!Number.isFinite(n) || n === 0) return STRINGS.timer.infinite;
+  const total = Math.round(n);
+  if (total < 120) return fill(STRINGS.timer.minutes, { n: total });
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m === 0 ? fill(STRINGS.timer.hours, { n: h }) : fill(STRINGS.timer.hoursMinutes, { h, m });
 }
 
 /** Orb label, status line, sub-line and live announcement for an engine state (§7.4 table). */

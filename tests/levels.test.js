@@ -11,7 +11,10 @@ const near = (actual, expected, tol, what = 'value') =>
   assert.ok(Math.abs(actual - expected) <= tol, `${what} ${actual} is not within ${tol} of ${expected}`);
 
 const SHAPES = ['linear', 'scurve', 'equalPowerIn', 'equalPowerOut'];
-const DEFAULT_MASTER = 0.7;
+import { DEFAULT_SETTINGS } from '../docs/js/core/state.js';
+
+// v2 starts quiet: master 0.45 instead of 0.7, every level about 7.7 dB below the plan §6.6 table.
+const DEFAULT_MASTER = DEFAULT_SETTINGS.mix.master;
 const LISTENINGS = ['headphones', 'speakers'];
 const DEVICES = ['phone', 'desktop'];
 
@@ -185,20 +188,20 @@ test('levelBudget: muted or missing layers add nothing, missing master is full, 
   assert.ok(glass.sumPeakDbfs < sine.sumPeakDbfs, 'glass has a lower crest than a sine');
 });
 
-test('every preset at its defaults sits inside the §6.6 windows on headphones and speakers, phone and desktop', () => {
+test('every preset at its quiet v2 defaults sits inside the windows (§6.6 shifted −8 dB) on headphones and speakers, phone and desktop', () => {
   for (const preset of PRESETS) {
     for (const listening of LISTENINGS) {
       for (const device of DEVICES) {
         const b = budgetFor(preset, listening, device);
         const where = `${preset.id} / ${listening} / ${device}`;
-        assert.ok(b.toneDbfsPeak >= -26 && b.toneDbfsPeak <= -18, `${where} tone peak ${b.toneDbfsPeak}`);
-        if (preset.mix.rain > 0) assert.ok(b.rainDbfsRms >= -40 && b.rainDbfsRms <= -24, `${where} rain ${b.rainDbfsRms}`);
+        assert.ok(b.toneDbfsPeak >= -36 && b.toneDbfsPeak <= -26, `${where} tone peak ${b.toneDbfsPeak}`);
+        if (preset.mix.rain > 0) assert.ok(b.rainDbfsRms >= -48 && b.rainDbfsRms <= -32, `${where} rain ${b.rainDbfsRms}`);
         if (preset.mix.ocean > 0) {
-          assert.ok(b.oceanCrestDbfsPeak >= -32 && b.oceanCrestDbfsPeak <= -18, `${where} ocean crest ${b.oceanCrestDbfsPeak}`);
-          assert.ok(b.oceanBedDbfsRms >= -50 && b.oceanBedDbfsRms <= -30, `${where} ocean bed ${b.oceanBedDbfsRms}`);
+          assert.ok(b.oceanCrestDbfsPeak >= -40 && b.oceanCrestDbfsPeak <= -26, `${where} ocean crest ${b.oceanCrestDbfsPeak}`);
+          assert.ok(b.oceanBedDbfsRms >= -58 && b.oceanBedDbfsRms <= -38, `${where} ocean bed ${b.oceanBedDbfsRms}`);
         }
-        if (preset.mix.purr > 0) assert.ok(b.purrDbfsRms >= -40 && b.purrDbfsRms <= -24, `${where} purr ${b.purrDbfsRms}`);
-        assert.ok(b.sumPeakDbfs <= -12, `${where} summed peak ${b.sumPeakDbfs}`);
+        if (preset.mix.purr > 0) assert.ok(b.purrDbfsRms >= -48 && b.purrDbfsRms <= -32, `${where} purr ${b.purrDbfsRms}`);
+        assert.ok(b.sumPeakDbfs <= -19, `${where} summed peak ${b.sumPeakDbfs}`);
       }
     }
   }

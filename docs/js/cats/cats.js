@@ -101,6 +101,7 @@ export function createCats(layerEl, deps) {
   let visible = true;
   let firstEver = true;
   let arrival = null;
+  let companionTimer = null;
   let lastCallAt = -Infinity;
   let press = null;
 
@@ -146,8 +147,28 @@ export function createCats(layerEl, deps) {
 
   function onArrival() {
     firstEver = false;
-    trySpawn();
+    const leader = trySpawn();
+    if (leader) scheduleCompanion(leader);
     scheduleArrival();
+  }
+
+  /** Cats come in company: a lone arrival brings a friend a moment later; walkers are chased across. */
+  function scheduleCompanion(leader) {
+    const delay = scheduler.companionDelay?.(active().length);
+    if (delay === null || delay === undefined) return;
+    drop(companionTimer);
+    companionTimer = after(delay, () => {
+      companionTimer = null;
+      if (!enabled || !started || leader.exiting) return;
+      const plan = scheduler.companion(leader.plan, planContext(active().length));
+      const friend = plan ? spawn(plan) : null;
+      if (friend && plan.frolic) leader.el.dataset.frolic = 'true';
+    });
+  }
+
+  function dropCompanion() {
+    drop(companionTimer);
+    companionTimer = null;
   }
 
   /** Play pressed while a visit is pending: keep the shorter of the current wait and a fresh playing-table draw. */
@@ -223,6 +244,7 @@ export function createCats(layerEl, deps) {
     el.tabIndex = -1;
     el.dataset.pose = plan.pose;
     el.dataset.coat = plan.coat;
+    if (plan.frolic) el.dataset.frolic = 'true';
     el.setAttribute('aria-label', catLabel(plan.pose, plan.coat));
     el.innerHTML = catSvg({ pose: plan.pose, coat: plan.coat, flip: plan.flip });
     addHappyEyes(el);
@@ -415,6 +437,7 @@ export function createCats(layerEl, deps) {
     started = false;
     drop(arrival);
     arrival = null;
+    dropCompanion();
   }
 
   function setEnabled(on) {
@@ -426,6 +449,7 @@ export function createCats(layerEl, deps) {
     }
     drop(arrival);
     arrival = null;
+    dropCompanion();
     for (const cat of [...cats]) exitCat(cat);
   }
 
@@ -445,7 +469,10 @@ export function createCats(layerEl, deps) {
     const now = performance.now();
     const ready = enabled && now - lastCallAt >= CAT_CONFIG.callCooldownMs;
     const cat = ready ? trySpawn() : null;
-    if (cat) lastCallAt = now;
+    if (cat) {
+      lastCallAt = now;
+      scheduleCompanion(cat);
+    }
     if (cat || active().length === 0) announce?.(cat ? STRINGS.cats.called : STRINGS.cats.none);
     return Boolean(cat);
   }

@@ -48,6 +48,7 @@
 </svg>
 
 <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+<div class="toon" id="toon" aria-hidden="true"></div>
 
 <main class="app">
   <section class="stage" aria-labelledby="status">
@@ -140,6 +141,9 @@
         <h2 class="section__title" id="h-timer">Timer</h2>
         <fieldset class="chips chips--timer" id="timer-chips"><legend class="sr-only">Timer</legend>
           <label class="chip chip--small"><input type="radio" name="timer" value="0"><span class="sr-only">No timer</span><span class="chip__text" aria-hidden="true">∞</span></label>
+          <label class="chip chip--small chip--long"><input type="radio" name="timer" value="720"><span class="chip__text">12 h</span></label>
+          <label class="chip chip--small chip--long"><input type="radio" name="timer" value="360"><span class="chip__text">6 h</span></label>
+          <label class="chip chip--small chip--long"><input type="radio" name="timer" value="120"><span class="chip__text">2 h</span></label>
           <label class="chip chip--small"><input type="radio" name="timer" value="10"><span class="chip__text">10 min</span></label>
           <label class="chip chip--small"><input type="radio" name="timer" value="15"><span class="chip__text">15 min</span></label>
           <label class="chip chip--small"><input type="radio" name="timer" value="20"><span class="chip__text">20 min</span></label>

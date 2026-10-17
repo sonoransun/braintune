@@ -8,16 +8,18 @@ function deepFreeze(value) {
 
 /** Timing, pose and coat tables for the cat scheduler (§5). */
 export const CAT_CONFIG = deepFreeze({
-  maxConcurrent: { narrow: 1, default: 2 },
-  firstDelayMs: { playing: [20e3, 40e3], idle: [60e3, 120e3] },
-  gapMs: { playing: [45e3, 150e3], idle: [90e3, 300e3] },
+  maxConcurrent: { narrow: 2, default: 3 },
+  minTogether: 2, // a lone arrival brings a companion so two or more cats frolic at a time
+  companionDelayMs: [1200, 3500],
+  firstDelayMs: { playing: [4e3, 9e3], idle: [10e3, 20e3] },
+  gapMs: { playing: [20e3, 60e3], idle: [40e3, 100e3] },
   dwellMs: { sit: [25e3, 60e3], loaf: [30e3, 70e3], sleep: [60e3, 180e3] },
   walkSpeedPxPerS: [28, 40],
   poseWeights: {
-    sleepy: { sleep: 0.5, loaf: 0.3, sit: 0.2 },
-    calm: { sit: 0.35, loaf: 0.35, walk: 0.3 },
-    alert: { walk: 0.5, sit: 0.3, loaf: 0.2 },
-    idle: { walk: 0.45, sit: 0.35, loaf: 0.2 },
+    sleepy: { sleep: 0.3, loaf: 0.2, sit: 0.1, walk: 0.4 },
+    calm: { sit: 0.3, loaf: 0.25, walk: 0.45 },
+    alert: { walk: 0.6, sit: 0.25, loaf: 0.15 },
+    idle: { walk: 0.5, sit: 0.3, loaf: 0.2 },
     still: { sit: 0.5, loaf: 0.5 },
   },
   coatWeights: { black: 1, orangeTabby: 1, grey: 1, calico: 1 },
@@ -35,7 +37,7 @@ const EXIT_MS = 500;
 const SLEEPY_PRESETS = new Set(['sleep', 'rest', 'catnap']);
 const ALERT_PRESETS = new Set(['focus', 'energise', 'clarity']);
 
-/** Scheduler → { nextArrivalDelay(ctx) → ms, mood(ctx) → mood, plan(ctx) → CatPlan | null }. */
+/** Scheduler → { nextArrivalDelay, mood, plan, companion(leader, ctx), companionDelay(activeCount) }. */
 export function createCatScheduler({ rng, config = CAT_CONFIG }) {
   let nextId = 1;
   const draw = ([lo, hi]) => randRange(rng, lo, hi);
@@ -51,7 +53,7 @@ export function createCatScheduler({ rng, config = CAT_CONFIG }) {
   function mood({ playing, purr, still, presetId }) {
     if (still) return 'still';
     if (!playing) return 'idle';
-    if (SLEEPY_PRESETS.has(presetId) || purr > 0) return 'sleepy';
+    if (SLEEPY_PRESETS.has(presetId)) return 'sleepy'; // purr plays everywhere in v2, so it no longer sends cats to sleep
     if (ALERT_PRESETS.has(presetId)) return 'alert';
     return 'calm';
   }
@@ -73,7 +75,26 @@ export function createCatScheduler({ rng, config = CAT_CONFIG }) {
     return { id: nextId++, pose, coat, flip, dwellMs, enterMs: ENTER_MS, exitMs: EXIT_MS, speedPxPerS, blinkEveryMs };
   }
 
-  return { nextArrivalDelay, mood, plan };
+  /** A companion for `leader`: walkers get a chaser (same direction, a touch faster, another coat); sitters a neighbour. */
+  function companion(leader, ctx) {
+    const next = plan(ctx);
+    if (!next) return null;
+    const coats = Object.fromEntries(Object.entries(config.coatWeights).filter(([coat]) => coat !== leader.coat));
+    next.coat = pickWeighted(coats, rng()) ?? next.coat;
+    if (leader.pose === 'walk' && ctx.still !== true) {
+      const speedPxPerS = leader.speedPxPerS * randRange(rng, 1.04, 1.12);
+      Object.assign(next, { pose: 'walk', flip: leader.flip, speedPxPerS, frolic: true, dwellMs: Math.round((1000 * (ctx.viewport.w + WALK_CROSSING_EXTRA_PX)) / speedPxPerS) });
+      leader.frolic = true;
+    }
+    return next;
+  }
+
+  /** Delay before a companion follows; null when enough cats are already about. */
+  function companionDelay(activeCount) {
+    return activeCount < config.minTogether ? Math.round(draw(config.companionDelayMs)) : null;
+  }
+
+  return { nextArrivalDelay, mood, plan, companion, companionDelay };
 }
 
 /** True when rects a and b overlap once a is grown by margin on every side (touching edges do not count). */

@@ -297,7 +297,7 @@ export function mountUI(root, options) {
     const s = store.get();
     store.set(`timer.byPreset.${s.presetId}`, minutes);
     if (isSounding()) retimeForPreset(store.get(), resolveSettings(s, platform), minutes);
-    toast('timer', minutes === 0 ? STRINGS.toasts.timerOff : minutes === 1 ? STRINGS.toasts.timerSetOne : fill(STRINGS.toasts.timerSet, { minutes }));
+    toast('timer', minutes === 0 ? STRINGS.toasts.timerOff : minutes === 1 ? STRINGS.toasts.timerSetOne : fill(STRINGS.toasts.timerSet, { minutes: formatMinutes(minutes) }));
   }
 
   // --- presets, listening, fine tuning ----------------------------------------------------------------------
@@ -374,7 +374,7 @@ export function mountUI(root, options) {
       setTimerMinutes(customTimerChosen ? stepper.get() : Number(value));
     },
   });
-  const stepper = bindStepper(timerCustomEl, { min: 1, max: 480, step: 5, value: 20, format: formatMinutes, onChange: (n) => setTimerMinutes(n) });
+  const stepper = bindStepper(timerCustomEl, { min: 1, max: 720, step: 5, value: 20, format: formatMinutes, onChange: (n) => setTimerMinutes(n) });
   const afterRadios = bindRadioGroup($('timer-after'), {
     onChange: (value) => {
       buzz('tap');

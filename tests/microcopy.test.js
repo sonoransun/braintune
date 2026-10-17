@@ -159,6 +159,11 @@ test('formatPercent, formatTimeLeft and formatMinutes', () => {
   assert.equal(formatTimeLeft(5400000 + 7000), '1:30:07');
   assert.equal(formatTimeLeft(1500), '0:02');
   assert.equal(formatMinutes(20), '20 min');
+  assert.equal(formatMinutes(0), '∞');
+  assert.equal(formatMinutes(90), '90 min');
+  assert.equal(formatMinutes(120), '2 h');
+  assert.equal(formatMinutes(720), '12 h');
+  assert.equal(formatMinutes(150), '2 h 30 min');
   assert.equal(formatMinutes(Infinity), '∞');
 });
 
@@ -166,7 +171,7 @@ test('fill replaces placeholders and blanks missing ones', () => {
   assert.equal(fill(STRINGS.cats.label, { coat: STRINGS.cats.coats.calico, pose: STRINGS.cats.poses.sit }), 'A calico cat sitting nearby');
   assert.equal(fill(STRINGS.cats.petting, { coat: 'grey' }), 'A grey cat, purring');
   assert.equal(fill(STRINGS.cats.milestone, { n: 10 }), "You've spotted 10 cats. They like you.");
-  assert.equal(fill(STRINGS.toasts.timerSet, { minutes: 30 }), 'Timer set to 30 minutes.');
+  assert.equal(fill(STRINGS.toasts.timerSet, { minutes: formatMinutes(30) }), 'Timer set to 30 min.');
   assert.equal(fill(STRINGS.titles.playing, { preset: 'Calm', beat: formatHz(10) }), 'Playing Calm 10 Hz — Brain Tune');
   assert.equal(fill('{a} and {b}', { a: 'x' }), 'x and ');
 });

@@ -4,18 +4,18 @@
 export const STORAGE_KEY = 'braintune:settings:v1';
 
 /** Current settings schema version; migrate() always stamps it. */
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 /** Default settings, deep-frozen; the store always hands out fresh clones. */
 export const DEFAULT_SETTINGS = deepFreeze({
   v: SETTINGS_VERSION,
   firstRunDone: false,
   listening: 'speakers',
-  presetId: 'calm',
+  presetId: 'sleep',
   custom: null,
-  mix: { master: 0.7, tone: 0.55, rain: 0.8, ocean: 0.55, purr: 0 },
+  mix: { master: 0.45, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 },
   muted: { tone: false, rain: false, ocean: false, purr: false },
-  rainIntensity: 0.45,
+  rainIntensity: 0.35,
   oceanIntensity: 0.35,
   timer: { byPreset: {}, after: 'stop' },
   theme: 'dark',
@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS = deepFreeze({
 });
 
 const CUSTOM_TEMPLATE = deepFreeze({ beatHz: 10, carrierHz: 256, timbre: 'velvet', pad: true, mode: 'auto' });
-const SESSION_TEMPLATE = deepFreeze({ presetId: 'calm', endsAt: null, pausedRemainingMs: null });
+const SESSION_TEMPLATE = deepFreeze({ presetId: 'sleep', endsAt: null, pausedRemainingMs: null });
 const TIMBRES = ['sine', 'velvet', 'glass', 'warm'];
 const MODES = ['auto', 'binaural', 'monaural', 'isochronic'];
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -147,7 +147,14 @@ const TOP_RULES = {
 // --- public API -------------------------------------------------------------
 
 /** Coerces any value into valid settings: unknown keys dropped, numbers clamped, enums checked, version stamped. */
+/** Keys a v1 store keeps when it moves to v2; everything else takes the v2 defaults (Sleep, purr and rain on, low volume, ∞ timer). */
+const KEPT_FROM_V1 = ['firstRunDone', 'listening', 'theme', 'motion', 'scene', 'cats', 'haptics', 'shortcuts', 'keepAwake', 'nightDim', 'hints'];
+
+/** Validated settings from any stored value; a v1 store keeps only personal choices so the v2 defaults apply once. */
 export function migrate(raw) {
+  if (isPlainObject(raw) && raw.v === 1) {
+    raw = Object.fromEntries(KEPT_FROM_V1.filter((key) => key in raw).map((key) => [key, raw[key]]));
+  }
   return validateShape(raw, DEFAULT_SETTINGS, TOP_RULES);
 }
 

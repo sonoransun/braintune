@@ -25,11 +25,11 @@ function fakeTimers() {
 
 test('defaults match the plan and are deep-frozen', () => {
   assert.equal(STORAGE_KEY, 'braintune:settings:v1');
-  assert.equal(SETTINGS_VERSION, 1);
-  assert.equal(DEFAULT_SETTINGS.v, 1);
+  assert.equal(SETTINGS_VERSION, 2);
+  assert.equal(DEFAULT_SETTINGS.v, 2);
   assert.equal(DEFAULT_SETTINGS.listening, 'speakers');
-  assert.equal(DEFAULT_SETTINGS.presetId, 'calm');
-  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.7, tone: 0.55, rain: 0.8, ocean: 0.55, purr: 0 });
+  assert.equal(DEFAULT_SETTINGS.presetId, 'sleep');
+  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.45, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 });
   assert.deepEqual(DEFAULT_SETTINGS.timer, { byPreset: {}, after: 'stop' });
   assert.equal(DEFAULT_SETTINGS.theme, 'dark');
   assert.equal(DEFAULT_SETTINGS.keepAwake, false);
@@ -49,7 +49,7 @@ test('migrate of nothing yields a fresh copy of the defaults', () => {
   assert.notEqual(a, DEFAULT_SETTINGS);
   assert.notEqual(a.mix, DEFAULT_SETTINGS.mix);
   a.mix.master = 0.1;
-  assert.equal(DEFAULT_SETTINGS.mix.master, 0.7);
+  assert.equal(DEFAULT_SETTINGS.mix.master, 0.45);
   for (const raw of [null, 'text', 42, [], true]) assert.deepEqual(migrate(raw), DEFAULT_SETTINGS);
 });
 
@@ -59,7 +59,7 @@ test('serialize/parse round-trip keeps every value', () => {
   assert.deepEqual(back, s);
   assert.equal(back.listening, 'headphones');
   assert.equal(back.mix.master, 0.4);
-  assert.equal(back.mix.tone, 0.55);
+  assert.equal(back.mix.tone, DEFAULT_SETTINGS.mix.tone);
   assert.equal(back.cats.spotted, 7);
   assert.deepEqual(back.custom, { beatHz: 7.5, carrierHz: 300, timbre: 'glass', pad: false, mode: 'binaural' });
 });
@@ -84,7 +84,7 @@ test('0..1 numbers are clamped, counters floored, bad types replaced', () => {
   const out = migrate({ mix: { master: 1.4, tone: -1, rain: 'loud', purr: 0.3 }, rainIntensity: 2, oceanIntensity: NaN, cats: { spotted: 3.9 }, haptics: 'yes' });
   assert.equal(out.mix.master, 1);
   assert.equal(out.mix.tone, 0);
-  assert.equal(out.mix.rain, 0.8);
+  assert.equal(out.mix.rain, DEFAULT_SETTINGS.mix.rain);
   assert.equal(out.mix.purr, 0.3);
   assert.equal(out.rainIntensity, 1);
   assert.equal(out.oceanIntensity, 0.35);
@@ -112,14 +112,14 @@ test('enums fall back to defaults when invalid', () => {
 
 test('nested objects merge over defaults; nullable objects validate or vanish', () => {
   const out = migrate({ mix: { ocean: 0.2 }, timer: { byPreset: { sleep: 45, focus: null, bad: 'x', neg: -1 } }, custom: { beatHz: -3, timbre: 'wood' }, session: { presetId: 'focus', endsAt: 1700000000000 } });
-  assert.deepEqual(out.mix, { master: 0.7, tone: 0.55, rain: 0.8, ocean: 0.2, purr: 0 });
+  assert.deepEqual(out.mix, { ...DEFAULT_SETTINGS.mix, ocean: 0.2 });
   assert.deepEqual(out.timer.byPreset, { sleep: 45, focus: null });
   assert.deepEqual(out.custom, { beatHz: 10, carrierHz: 256, timbre: 'velvet', pad: true, mode: 'auto' });
   assert.deepEqual(out.session, { presetId: 'focus', endsAt: 1700000000000, pausedRemainingMs: null });
   assert.equal(migrate({ session: { presetId: 'calm' } }).session, null);
   assert.equal(migrate({ session: 'later' }).session, null);
   assert.equal(migrate({ custom: 'yes' }).custom, null);
-  assert.deepEqual(migrate({ session: { pausedRemainingMs: 5000 } }).session, { presetId: 'calm', endsAt: null, pausedRemainingMs: 5000 });
+  assert.deepEqual(migrate({ session: { pausedRemainingMs: 5000 } }).session, { presetId: 'sleep', endsAt: null, pausedRemainingMs: 5000 });
 });
 
 test('store reads once at creation and persists after each change', () => {
@@ -127,7 +127,7 @@ test('store reads once at creation and persists after each change', () => {
   const store = createStore(storage);
   assert.equal(store.get().theme, 'light');
   assert.equal(store.get().mix.master, 0.3);
-  assert.equal(store.get().mix.rain, 0.8);
+  assert.equal(store.get().mix.rain, DEFAULT_SETTINGS.mix.rain);
   assert.equal(store.persisted, true);
   store.set('mix.master', 0.5);
   assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).mix.master, 0.5);
@@ -140,7 +140,7 @@ test('get() returns clones; mutating them never touches the store', () => {
   const a = store.get();
   a.mix.master = 0;
   a.cats.spotted = 99;
-  assert.equal(store.get().mix.master, 0.7);
+  assert.equal(store.get().mix.master, DEFAULT_SETTINGS.mix.master);
   assert.equal(store.get().cats.spotted, 0);
   const obj = { beatHz: 8, carrierHz: 300, timbre: 'sine', pad: false, mode: 'auto' };
   store.set('custom', obj);
@@ -185,7 +185,7 @@ test('subscribers get only the changed top-level keys', () => {
   assert.equal(calls.at(-1).state.mix.master, 0.2);
   store.patch({ theme: 'light', haptics: false, mix: { tone: 0.1 } });
   assert.deepEqual([...calls.at(-1).keys].sort(), ['haptics', 'mix', 'theme']);
-  assert.deepEqual(calls.at(-1).state.mix, { master: 0.2, tone: 0.1, rain: 0.8, ocean: 0.55, purr: 0 });
+  assert.deepEqual(calls.at(-1).state.mix, { ...DEFAULT_SETTINGS.mix, master: 0.2, tone: 0.1 });
   const before = calls.length;
   store.set('mix.master', 0.2);
   store.patch({ theme: 'light', mix: { tone: 0.1 } });
@@ -247,4 +247,20 @@ test('a custom key is honoured', () => {
   store.set('theme', 'light');
   assert.ok(storage.getItem('other'));
   assert.equal(storage.getItem(STORAGE_KEY), null);
+});
+
+test('a v1 store keeps personal choices and takes the v2 defaults once (Sleep, purr and rain on, quiet, ∞ timer)', () => {
+  const v1 = {
+    v: 1, firstRunDone: true, listening: 'headphones', presetId: 'focus', theme: 'light', cats: { enabled: true, spotted: 7 },
+    mix: { master: 0.9, tone: 0.55, rain: 0, ocean: 0.55, purr: 0 }, timer: { byPreset: { focus: 45 }, after: 'ambient' },
+  };
+  const out = migrate(v1);
+  assert.equal(out.v, 2);
+  assert.deepEqual([out.firstRunDone, out.listening, out.theme, out.cats.spotted], [true, 'headphones', 'light', 7]);
+  assert.equal(out.presetId, 'sleep');
+  assert.deepEqual(out.mix, DEFAULT_SETTINGS.mix);
+  assert.deepEqual(out.timer, { byPreset: {}, after: 'stop' });
+  const again = migrate(JSON.parse(JSON.stringify(out)));
+  assert.deepEqual(again, out, 'a v2 store is not reset again');
+  assert.equal(migrate({ mix: { master: 0.3 } }).mix.master, 0.3, 'unversioned input is validated, not reset');
 });

@@ -142,7 +142,7 @@ export function bindDisclosure(toggle, panel, { wrapper = toggle.closest('.discl
 }
 
 /** Binds a stepper (buttons with data-step="±1" around an <output>): values snap to the step grid within [min, max]; onChange(n, event). */
-export function bindStepper(root, { min = 1, max = 480, step = 5, value = 20, format = String, output = root.querySelector('output'), onChange } = {}) {
+export function bindStepper(root, { min = 1, max = 720, step = 5, value = 20, format = String, output = root.querySelector('output'), onChange } = {}) {
   let current = clamp(Math.round(value), min, max);
   const paint = () => {
     if (output) output.textContent = format(current);

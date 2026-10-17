@@ -6,10 +6,11 @@ import { gateParams } from './gate.js';
 import { TIMBRES } from './timbres.js';
 
 /** Timer lengths offered, minutes. */
-export const TIMER_OPTIONS = Object.freeze([10, 15, 20, 30, 45, 60, 90]);
+/** Timer choices in display order, in minutes: ∞ (0) first, then the long sessions, then the short ones. */
+export const TIMER_OPTIONS = Object.freeze([0, 720, 360, 120, 10, 15, 20, 30, 45, 60, 90]);
 
 /** Preset selected on first run. */
-export const DEFAULT_PRESET_ID = 'calm';
+export const DEFAULT_PRESET_ID = 'sleep';
 
 /** Intensities a preset carries for a layer it leaves off (the global defaults), so raising that slider sounds like the default. */
 const DEFAULT_RAIN_INTENSITY = 0.45;
@@ -21,63 +22,63 @@ const CHIMES = ['none', 'soft'];
 const CAT_MOODS = ['sleepy', 'calm', 'alert'];
 const LAYERS = ['tone', 'rain', 'ocean', 'purr'];
 
-/** The eight presets in display order; carriers are headphones (binaural) and speakers (isochronic) values. */
+/** The eight presets in display order; carriers are headphones and speakers values. Every preset purrs and plays until stopped (timer ∞). */
 export const PRESETS = deepFreeze([
   {
     id: 'sleep', name: 'Sleep', band: 'delta', beatHz: 2, glide: { fromHz: 6, minutes: 12 },
     carrierHz: { headphones: 200, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.5, rain: 0, ocean: 0.8, purr: 0 },
-    rainIntensity: DEFAULT_RAIN_INTENSITY, oceanIntensity: 0.35,
-    timerMinutes: 45, endFadeSeconds: 90, chime: 'none',
+    mix: { tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 },
+    rainIntensity: 0.35, oceanIntensity: 0.35,
+    timerMinutes: 0, endFadeSeconds: 90, chime: 'none',
   },
   {
     id: 'rest', name: 'Rest', band: 'delta', beatHz: 3.5,
     carrierHz: { headphones: 210, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.55, rain: 0.65, ocean: 0.65, purr: 0 },
+    mix: { tone: 0.55, rain: 0.65, ocean: 0.6, purr: 0.5 },
     rainIntensity: 0.35, oceanIntensity: 0.3,
-    timerMinutes: 20, endFadeSeconds: 60, chime: 'none',
+    timerMinutes: 0, endFadeSeconds: 60, chime: 'none',
   },
   {
     id: 'meditate', name: 'Meditate', band: 'theta', beatHz: 6,
     carrierHz: { headphones: 256, speakers: 420 }, timbre: 'glass', pad: true,
-    mix: { tone: 0.55, rain: 0, ocean: 0.75, purr: 0 },
+    mix: { tone: 0.55, rain: 0.6, ocean: 0.7, purr: 0.45 },
     rainIntensity: DEFAULT_RAIN_INTENSITY, oceanIntensity: 0.4,
-    timerMinutes: 20, endFadeSeconds: 30, chime: 'soft',
+    timerMinutes: 0, endFadeSeconds: 30, chime: 'soft',
   },
   {
     id: 'catnap', name: 'Cat nap', band: 'theta', beatHz: 5.5,
     carrierHz: { headphones: 220, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.5, rain: 0.65, ocean: 0, purr: 0.55 },
+    mix: { tone: 0.45, rain: 0.6, ocean: 0, purr: 0.7 },
     rainIntensity: 0.4, oceanIntensity: DEFAULT_OCEAN_INTENSITY,
-    timerMinutes: 20, endFadeSeconds: 60, chime: 'none', catMood: 'sleepy',
+    timerMinutes: 0, endFadeSeconds: 60, chime: 'none', catMood: 'sleepy',
   },
   {
     id: 'calm', name: 'Calm', band: 'alpha', beatHz: 10,
     carrierHz: { headphones: 256, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.55, rain: 0.8, ocean: 0.55, purr: 0 },
+    mix: { tone: 0.55, rain: 0.75, ocean: 0.5, purr: 0.45 },
     rainIntensity: 0.45, oceanIntensity: 0.35,
-    timerMinutes: 20, endFadeSeconds: 30, chime: 'none',
+    timerMinutes: 0, endFadeSeconds: 30, chime: 'none',
   },
   {
     id: 'focus', name: 'Focus', band: 'beta', beatHz: 15,
     carrierHz: { headphones: 320, speakers: 520 }, timbre: 'glass', pad: false,
-    mix: { tone: 0.55, rain: 0.8, ocean: 0, purr: 0 },
+    mix: { tone: 0.55, rain: 0.75, ocean: 0, purr: 0.4 },
     rainIntensity: 0.5, oceanIntensity: DEFAULT_OCEAN_INTENSITY,
-    timerMinutes: 45, endFadeSeconds: 30, chime: 'soft',
+    timerMinutes: 0, endFadeSeconds: 30, chime: 'soft',
   },
   {
     id: 'energise', name: 'Energise', band: 'beta', beatHz: 20,
     carrierHz: { headphones: 400, speakers: 640 }, timbre: 'warm', pad: false,
-    mix: { tone: 0.6, rain: 0.6, ocean: 0.7, purr: 0 },
+    mix: { tone: 0.6, rain: 0.6, ocean: 0.65, purr: 0.4 },
     rainIntensity: 0.55, oceanIntensity: 0.6,
-    timerMinutes: 15, endFadeSeconds: 20, chime: 'soft',
+    timerMinutes: 0, endFadeSeconds: 20, chime: 'soft',
   },
   {
     id: 'clarity', name: 'Clarity', band: 'gamma', beatHz: 40,
     carrierHz: { headphones: 400, speakers: 520 }, timbre: 'warm', pad: false,
-    mix: { tone: 0.55, rain: 0.7, ocean: 0, purr: 0 },
+    mix: { tone: 0.55, rain: 0.7, ocean: 0, purr: 0.4 },
     rainIntensity: 0.45, oceanIntensity: DEFAULT_OCEAN_INTENSITY,
-    timerMinutes: 20, endFadeSeconds: 30, chime: 'soft', forceMode: 'isochronic',
+    timerMinutes: 0, endFadeSeconds: 30, chime: 'soft', forceMode: 'isochronic',
   },
 ]);
 

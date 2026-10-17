@@ -13,9 +13,11 @@ function sample(fn, n) {
 }
 
 test('CAT_CONFIG matches §5 and is frozen', () => {
-  assert.deepEqual(CAT_CONFIG.maxConcurrent, { narrow: 1, default: 2 });
-  assert.deepEqual(CAT_CONFIG.firstDelayMs, { playing: [20e3, 40e3], idle: [60e3, 120e3] });
-  assert.deepEqual(CAT_CONFIG.gapMs, { playing: [45e3, 150e3], idle: [90e3, 300e3] });
+  assert.deepEqual(CAT_CONFIG.maxConcurrent, { narrow: 2, default: 3 });
+  assert.equal(CAT_CONFIG.minTogether, 2);
+  assert.deepEqual(CAT_CONFIG.companionDelayMs, [1200, 3500]);
+  assert.deepEqual(CAT_CONFIG.firstDelayMs, { playing: [4e3, 9e3], idle: [10e3, 20e3] });
+  assert.deepEqual(CAT_CONFIG.gapMs, { playing: [20e3, 60e3], idle: [40e3, 100e3] });
   assert.deepEqual(CAT_CONFIG.dwellMs, { sit: [25e3, 60e3], loaf: [30e3, 70e3], sleep: [60e3, 180e3] });
   assert.deepEqual(CAT_CONFIG.walkSpeedPxPerS, [28, 40]);
   assert.deepEqual(Object.keys(CAT_CONFIG.poseWeights), ['sleepy', 'calm', 'alert', 'idle', 'still']);
@@ -36,32 +38,32 @@ test('arrival delays fall in the configured ranges for first visit, playing, idl
     assert.ok(xs.every((x) => x >= lo && x < hi), `${JSON.stringify(ctx)} outside [${lo}, ${hi})`);
     assert.ok(Math.min(...xs) < lo + (hi - lo) * 0.05 && Math.max(...xs) > hi - (hi - lo) * 0.05, 'spans the range');
   };
-  check({ playing: true, firstEver: true, presetId: 'calm' }, [20e3, 40e3]);
-  check({ playing: false, firstEver: true, presetId: 'calm' }, [60e3, 120e3]);
-  check({ playing: true, firstEver: false, presetId: 'calm' }, [45e3, 150e3]);
-  check({ playing: false, firstEver: false, presetId: 'calm' }, [90e3, 300e3]);
-  check({ playing: true, firstEver: false, presetId: 'catnap' }, [27e3, 90e3]);
-  check({ playing: true, firstEver: true, presetId: 'catnap' }, [12e3, 24e3]);
+  check({ playing: true, firstEver: true, presetId: 'calm' }, [4e3, 9e3]);
+  check({ playing: false, firstEver: true, presetId: 'calm' }, [10e3, 20e3]);
+  check({ playing: true, firstEver: false, presetId: 'calm' }, [20e3, 60e3]);
+  check({ playing: false, firstEver: false, presetId: 'calm' }, [40e3, 100e3]);
+  check({ playing: true, firstEver: false, presetId: 'catnap' }, [12e3, 36e3]);
+  check({ playing: true, firstEver: true, presetId: 'catnap' }, [2.4e3, 5.4e3]);
 });
 
-test('mood: still wins, then idle, then preset / purr rules, fallback calm', () => {
+test('mood: still wins, then idle, then preset rules (purr no longer forces sleepy), fallback calm', () => {
   const s = createCatScheduler({ rng: mulberry32(2) });
   assert.equal(s.mood({ playing: true, still: true, presetId: 'focus', purr: 0 }), 'still');
   assert.equal(s.mood({ playing: false, still: false, presetId: 'sleep', purr: 0.5 }), 'idle');
   for (const presetId of ['sleep', 'rest', 'catnap']) assert.equal(s.mood({ playing: true, still: false, presetId, purr: 0 }), 'sleepy');
-  assert.equal(s.mood({ playing: true, still: false, presetId: 'focus', purr: 0.2 }), 'sleepy');
+  assert.equal(s.mood({ playing: true, still: false, presetId: 'focus', purr: 0.4 }), 'alert');
   for (const presetId of ['meditate', 'calm']) assert.equal(s.mood({ playing: true, still: false, presetId, purr: 0 }), 'calm');
   for (const presetId of ['focus', 'energise', 'clarity']) assert.equal(s.mood({ playing: true, still: false, presetId, purr: 0 }), 'alert');
   assert.equal(s.mood({ playing: true, still: false, presetId: 'mystery', purr: 0 }), 'calm');
 });
 
-test('plan is null at maxConcurrent for the width class (narrow < 400 → 1, else 2)', () => {
+test('plan is null at maxConcurrent for the width class (narrow < 400 → 2, else 3)', () => {
   const s = createCatScheduler({ rng: mulberry32(3) });
-  assert.equal(s.plan({ ...baseCtx, viewport: { w: 390, h: 844 }, activeCount: 1 }), null);
-  assert.ok(s.plan({ ...baseCtx, viewport: { w: 390, h: 844 }, activeCount: 0 }));
-  assert.ok(s.plan({ ...baseCtx, viewport: { w: 400, h: 844 }, activeCount: 1 }));
-  assert.equal(s.plan({ ...baseCtx, viewport: { w: 400, h: 844 }, activeCount: 2 }), null);
-  assert.equal(s.plan({ ...baseCtx, activeCount: 2 }), null);
+  assert.equal(s.plan({ ...baseCtx, viewport: { w: 390, h: 844 }, activeCount: 2 }), null);
+  assert.ok(s.plan({ ...baseCtx, viewport: { w: 390, h: 844 }, activeCount: 1 }));
+  assert.ok(s.plan({ ...baseCtx, viewport: { w: 400, h: 844 }, activeCount: 2 }));
+  assert.equal(s.plan({ ...baseCtx, viewport: { w: 400, h: 844 }, activeCount: 3 }), null);
+  assert.equal(s.plan({ ...baseCtx, activeCount: 3 }), null);
   assert.equal(s.plan({ ...baseCtx, activeCount: 5 }), null);
 });
 
@@ -121,14 +123,16 @@ test('pose frequencies match the mood weights ± 2 % and coats are uniform', () 
   }
 });
 
-test('still mood never walks or sleeps; sleepy never walks', () => {
+test('still mood never walks or sleeps; sleepy cats mostly rest but sometimes frolic', () => {
   const s = createCatScheduler({ rng: mulberry32(6) });
+  let sleepyWalks = 0;
   for (let i = 0; i < 5000; i++) {
     const still = s.plan({ ...baseCtx, still: true });
     assert.ok(still.pose === 'sit' || still.pose === 'loaf', still.pose);
     assert.equal(still.speedPxPerS, null);
-    assert.notEqual(s.plan({ ...baseCtx, presetId: 'rest' }).pose, 'walk');
+    if (s.plan({ ...baseCtx, presetId: 'rest' }).pose === 'walk') sleepyWalks += 1;
   }
+  assert.ok(sleepyWalks > 1700 && sleepyWalks < 2300, `sleepy walk share ${sleepyWalks / 5000}`);
 });
 
 test('rectsIntersect: overlap, touching edges and margin', () => {
@@ -183,4 +187,28 @@ test('placeCat: walkers start off-screen on the side they face and skip avoid ch
   const wall = [{ x: -1000, y: -1000, w: 5000, h: 5000 }];
   assert.deepEqual(placeCat({ plan: { pose: 'walk', flip: false }, viewport, ledge, avoid: wall, size, rng: mulberry32(1) }), { x: -112, y: 604 });
   assert.deepEqual(placeCat({ plan: { pose: 'walk', flip: true }, viewport, ledge, avoid: wall, size, rng: mulberry32(1) }), { x: 1024, y: 604 });
+});
+
+test('companions: a lone cat brings a friend; walkers get a same-direction, slightly faster chaser in another coat', () => {
+  const s = createCatScheduler({ rng: mulberry32(9) });
+  assert.equal(s.companionDelay(0) >= 1200 && s.companionDelay(1) <= 3500, true);
+  assert.equal(s.companionDelay(2), null, 'two cats about: no companion needed');
+  let chasers = 0;
+  for (let i = 0; i < 300; i++) {
+    const leader = s.plan(baseCtx);
+    const friend = s.companion(leader, { ...baseCtx, activeCount: 1 });
+    assert.ok(friend, 'room for a companion');
+    assert.notEqual(friend.coat, leader.coat);
+    if (leader.pose === 'walk') {
+      chasers += 1;
+      assert.equal(friend.pose, 'walk');
+      assert.equal(friend.flip, leader.flip);
+      assert.ok(friend.speedPxPerS > leader.speedPxPerS && friend.speedPxPerS < leader.speedPxPerS * 1.13);
+      assert.ok(friend.frolic && leader.frolic);
+    }
+  }
+  assert.ok(chasers > 30, `walkers were paired (${chasers})`);
+  assert.equal(s.companion(s.plan(baseCtx), { ...baseCtx, activeCount: 3 }), null, 'never above the cap');
+  const stillLeader = { ...s.plan({ ...baseCtx, still: true }), pose: 'walk', speedPxPerS: 30 };
+  assert.notEqual(s.companion(stillLeader, { ...baseCtx, still: true, activeCount: 1 }).pose, 'walk', 'Still mode never sends a chaser');
 });

@@ -280,3 +280,100 @@ html[data-motion="still"] .cat:active .cat__svg {
 html[data-motion="still"] .cat__heart {
   animation-name: cat-heart-still;
 }
+
+/* --- frolicking pairs: walkers that chase each other hop a little (translate only, exempt from the 10 s floor) ---- */
+
+.cat[data-frolic] .cat__svg {
+  animation: cat-hop 1.8s var(--ease-breath, ease-in-out) infinite;
+}
+
+.cat[data-frolic]:nth-child(even) .cat__svg {
+  animation-delay: -0.9s;
+}
+
+html[data-motion="still"] .cat[data-frolic] .cat__svg {
+  animation: none;
+}
+
+@keyframes cat-hop {
+  0%, 55%, 100% { translate: 0 0; }
+  25% { translate: 0 -9px; }
+}
+
+/* --- cell-shaded background cats: shown while a purr is audible (cats/toon.js) ------------------------------- */
+
+.toon {
+  --toon-opacity: 0.34;
+  position: fixed;
+  inset: 0;
+  z-index: 0; /* after the canvas in the DOM: above the sea, below the visiting cats and every control */
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-scene, 2500ms) var(--ease-breath, ease-in-out);
+}
+
+.toon.is-active { opacity: var(--toon-opacity); }
+html[data-theme="light"] .toon { --toon-opacity: 0.42; }
+html[data-dim="night"] .toon.is-active { opacity: calc(var(--toon-opacity) * 0.6); }
+html[data-scene="off"] .toon { display: none; }
+
+.toon__cat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--w);
+  height: var(--h);
+  transform: translate(var(--x), var(--y));
+}
+
+.toon__svg { display: block; overflow: visible; }
+.toon__cat[data-flip] .toon__svg { transform: scaleX(-1); }
+.toon__part { transform-box: view-box; }
+
+.toon.is-active .toon__head { animation: toon-tilt 7s var(--ease-breath, ease-in-out) infinite; }
+.toon.is-active .toon__tail { animation: toon-swish 3.2s ease-in-out infinite; }
+.toon.is-active .toon__bat { animation: toon-bat 2.4s ease-in-out infinite; }
+.toon.is-active .toon__yarn { animation: toon-roll 2.4s ease-in-out infinite; }
+.toon.is-active .toon__paw { animation: toon-knead 2.8s ease-in-out infinite; }
+.toon.is-active .toon__body { animation: toon-breathe var(--t-cat-breath, 10s) var(--ease-breath, ease-in-out) infinite; }
+.toon.is-active .toon__cat--right { animation: toon-drift 22s var(--ease-breath, ease-in-out) infinite alternate; }
+.toon.is-active .toon__cat--right .toon__head { animation-delay: -3.5s; }
+
+html[data-motion="still"] .toon.is-active .toon__part,
+html[data-motion="still"] .toon.is-active .toon__cat { animation: none; }
+
+@keyframes toon-tilt {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@keyframes toon-swish {
+  0%, 100% { transform: rotate(-9deg); }
+  50% { transform: rotate(12deg); }
+}
+
+@keyframes toon-bat {
+  0%, 45%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-30deg); }
+}
+
+@keyframes toon-roll {
+  0%, 15%, 100% { transform: translateX(0) rotate(0deg); }
+  45% { transform: translateX(-10px) rotate(-60deg); }
+}
+
+@keyframes toon-knead {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-12deg); }
+}
+
+@keyframes toon-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1, 1.02); }
+}
+
+@keyframes toon-drift {
+  from { translate: 0 0; }
+  to { translate: -36px 0; }
+}

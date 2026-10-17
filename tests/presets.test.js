@@ -27,9 +27,9 @@ test('eight presets in display order, every one valid, unique ids, names of at m
 });
 
 test('TIMER_OPTIONS, DEFAULT_PRESET_ID and getPreset', () => {
-  assert.deepEqual([...TIMER_OPTIONS], [10, 15, 20, 30, 45, 60, 90]);
-  assert.equal(DEFAULT_PRESET_ID, 'calm');
-  assert.equal(getPreset(DEFAULT_PRESET_ID).name, 'Calm');
+  assert.deepEqual([...TIMER_OPTIONS], [0, 720, 360, 120, 10, 15, 20, 30, 45, 60, 90], '∞ first, then 12 h, 6 h, 2 h, then the short ones');
+  assert.equal(DEFAULT_PRESET_ID, 'sleep');
+  assert.equal(getPreset(DEFAULT_PRESET_ID).name, 'Sleep');
   assert.equal(getPreset('nap'), undefined);
   for (const p of PRESETS) assert.ok(TIMER_OPTIONS.includes(p.timerMinutes), `${p.id} timer ${p.timerMinutes}`);
 });
@@ -39,23 +39,23 @@ test('table values match §6.5', () => {
   assert.deepEqual(sleep, {
     id: 'sleep', name: 'Sleep', band: 'delta', beatHz: 2, glide: { fromHz: 6, minutes: 12 },
     carrierHz: { headphones: 200, speakers: 420 }, timbre: 'velvet', pad: true,
-    mix: { tone: 0.5, rain: 0, ocean: 0.8, purr: 0 }, rainIntensity: 0.45, oceanIntensity: 0.35,
-    timerMinutes: 45, endFadeSeconds: 90, chime: 'none',
+    mix: { tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 }, rainIntensity: 0.35, oceanIntensity: 0.35,
+    timerMinutes: 0, endFadeSeconds: 90, chime: 'none',
   });
   assert.deepEqual([rest.band, rest.beatHz, rest.carrierHz, rest.mix, rest.rainIntensity, rest.oceanIntensity, rest.timerMinutes, rest.endFadeSeconds, rest.chime],
-    ['delta', 3.5, { headphones: 210, speakers: 420 }, { tone: 0.55, rain: 0.65, ocean: 0.65, purr: 0 }, 0.35, 0.3, 20, 60, 'none']);
+    ['delta', 3.5, { headphones: 210, speakers: 420 }, { tone: 0.55, rain: 0.65, ocean: 0.6, purr: 0.5 }, 0.35, 0.3, 0, 60, 'none']);
   assert.deepEqual([meditate.band, meditate.beatHz, meditate.carrierHz, meditate.timbre, meditate.pad, meditate.mix, meditate.oceanIntensity, meditate.endFadeSeconds, meditate.chime],
-    ['theta', 6, { headphones: 256, speakers: 420 }, 'glass', true, { tone: 0.55, rain: 0, ocean: 0.75, purr: 0 }, 0.4, 30, 'soft']);
+    ['theta', 6, { headphones: 256, speakers: 420 }, 'glass', true, { tone: 0.55, rain: 0.6, ocean: 0.7, purr: 0.45 }, 0.4, 30, 'soft']);
   assert.deepEqual([catnap.band, catnap.beatHz, catnap.carrierHz, catnap.mix, catnap.rainIntensity, catnap.timerMinutes, catnap.endFadeSeconds, catnap.catMood],
-    ['theta', 5.5, { headphones: 220, speakers: 420 }, { tone: 0.5, rain: 0.65, ocean: 0, purr: 0.55 }, 0.4, 20, 60, 'sleepy']);
+    ['theta', 5.5, { headphones: 220, speakers: 420 }, { tone: 0.45, rain: 0.6, ocean: 0, purr: 0.7 }, 0.4, 0, 60, 'sleepy']);
   assert.deepEqual([calm.band, calm.beatHz, calm.carrierHz, calm.timbre, calm.pad, calm.mix, calm.rainIntensity, calm.oceanIntensity, calm.timerMinutes, calm.endFadeSeconds, calm.chime],
-    ['alpha', 10, { headphones: 256, speakers: 420 }, 'velvet', true, { tone: 0.55, rain: 0.8, ocean: 0.55, purr: 0 }, 0.45, 0.35, 20, 30, 'none']);
+    ['alpha', 10, { headphones: 256, speakers: 420 }, 'velvet', true, { tone: 0.55, rain: 0.75, ocean: 0.5, purr: 0.45 }, 0.45, 0.35, 0, 30, 'none']);
   assert.deepEqual([focus.band, focus.beatHz, focus.carrierHz, focus.timbre, focus.pad, focus.mix, focus.rainIntensity, focus.timerMinutes, focus.chime],
-    ['beta', 15, { headphones: 320, speakers: 520 }, 'glass', false, { tone: 0.55, rain: 0.8, ocean: 0, purr: 0 }, 0.5, 45, 'soft']);
+    ['beta', 15, { headphones: 320, speakers: 520 }, 'glass', false, { tone: 0.55, rain: 0.75, ocean: 0, purr: 0.4 }, 0.5, 0, 'soft']);
   assert.deepEqual([energise.band, energise.beatHz, energise.carrierHz, energise.timbre, energise.pad, energise.mix, energise.rainIntensity, energise.oceanIntensity, energise.timerMinutes, energise.endFadeSeconds, energise.chime],
-    ['beta', 20, { headphones: 400, speakers: 640 }, 'warm', false, { tone: 0.6, rain: 0.6, ocean: 0.7, purr: 0 }, 0.55, 0.6, 15, 20, 'soft']);
+    ['beta', 20, { headphones: 400, speakers: 640 }, 'warm', false, { tone: 0.6, rain: 0.6, ocean: 0.65, purr: 0.4 }, 0.55, 0.6, 0, 20, 'soft']);
   assert.deepEqual([clarity.band, clarity.beatHz, clarity.carrierHz, clarity.timbre, clarity.pad, clarity.mix, clarity.rainIntensity, clarity.timerMinutes, clarity.endFadeSeconds, clarity.chime, clarity.forceMode],
-    ['gamma', 40, { headphones: 400, speakers: 520 }, 'warm', false, { tone: 0.55, rain: 0.7, ocean: 0, purr: 0 }, 0.45, 20, 30, 'soft', 'isochronic']);
+    ['gamma', 40, { headphones: 400, speakers: 520 }, 'warm', false, { tone: 0.55, rain: 0.7, ocean: 0, purr: 0.4 }, 0.45, 0, 30, 'soft', 'isochronic']);
   assert.ok(PRESETS.filter((p) => p.pad).map((p) => p.id).join() === 'sleep,rest,meditate,catnap,calm');
   assert.ok(PRESETS.filter((p) => p.chime === 'soft').map((p) => p.id).join() === 'meditate,focus,energise,clarity');
 });
@@ -106,8 +106,12 @@ test('clarity resolves to isochronic on headphones, on speakers and under any ov
   }
 });
 
-test('only Cat nap has purr > 0 and it is the sleepy preset', () => {
-  assert.deepEqual(PRESETS.filter((p) => p.mix.purr > 0).map((p) => p.id), ['catnap']);
+test('every preset purrs and plays until stopped; Cat nap purrs most and is the sleepy preset', () => {
+  for (const p of PRESETS) {
+    assert.ok(p.mix.purr >= 0.4, `${p.id} purr ${p.mix.purr}`);
+    assert.equal(p.timerMinutes, 0, `${p.id} defaults to ∞`);
+  }
+  assert.equal(Math.max(...PRESETS.map((p) => p.mix.purr)), getPreset('catnap').mix.purr);
   assert.equal(getPreset('catnap').catMood, 'sleepy');
   assert.equal(resolvePreset(getPreset('catnap'), { listening: 'speakers', device: 'phone' }).catMood, 'sleepy');
   for (const p of PRESETS) if (p.id !== 'catnap') assert.equal(resolvePreset(p, { listening: 'speakers', device: 'phone' }).catMood, null, p.id);
@@ -154,7 +158,7 @@ test('resolvePreset: shape, gate from the beat, copies that leave PRESETS untouc
   assert.equal(getPreset('calm').mix.tone, 0.55);
   assert.deepEqual(
     [r.timbre, r.pad, r.rainIntensity, r.oceanIntensity, r.timerMinutes, r.endFadeSeconds, r.chime],
-    ['velvet', true, 0.45, 0.35, 20, 30, 'none'],
+    ['velvet', true, 0.45, 0.35, 0, 30, 'none'],
   );
   const mono = resolvePreset(calm, { listening: 'headphones', device: 'desktop', override: 'monaural' });
   assert.equal(mono.mode, 'monaural');

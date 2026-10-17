@@ -18,16 +18,18 @@ On first run a single card asks "How are you listening right now?" with **Speake
 
 ### Presets
 
+A fresh start (and the first visit after updating from 0.1) opens on Sleep with rain, ocean and purr on, the volume low and no timer. Your listening choice, theme and cat count are kept.
+
 | Preset | Band | Beat | Carrier, headphones / speakers | Layers on | Timer | For |
 |---|---|---|---|---|---|---|
-| Sleep | delta | 2 Hz, starting at 6 Hz and gliding down over 12 min | 200 / 420 Hz | ocean | 45 min | drifting off |
-| Rest | delta | 3.5 Hz | 210 / 420 Hz | rain, ocean | 20 min | winding down |
-| Meditate | theta | 6 Hz | 256 / 420 Hz | ocean | 20 min | sitting quietly |
-| Cat nap | theta | 5.5 Hz | 220 / 420 Hz | rain, purr | 20 min | a short doze |
-| Calm | alpha | 10 Hz | 256 / 420 Hz | rain, ocean | 20 min | settling; the default |
-| Focus | beta | 15 Hz | 320 / 520 Hz | rain | 45 min | steady work |
-| Energise | beta | 20 Hz | 400 / 640 Hz | rain, ocean | 15 min | getting going |
-| Clarity | gamma | 40 Hz | 400 / 520 Hz, pulsing on both | rain | 20 min | alert work |
+| Sleep | delta | 2 Hz, starting at 6 Hz and gliding down over 12 min | 200 / 420 Hz | rain, ocean, purr | ∞ | drifting off; the default |
+| Rest | delta | 3.5 Hz | 210 / 420 Hz | rain, ocean, purr | ∞ | winding down |
+| Meditate | theta | 6 Hz | 256 / 420 Hz | rain, ocean, purr | ∞ | sitting quietly |
+| Cat nap | theta | 5.5 Hz | 220 / 420 Hz | rain, purr (the most purr) | ∞ | a short doze |
+| Calm | alpha | 10 Hz | 256 / 420 Hz | rain, ocean, purr | ∞ | settling |
+| Focus | beta | 15 Hz | 320 / 520 Hz | rain, purr | ∞ | steady work |
+| Energise | beta | 20 Hz | 400 / 640 Hz | rain, ocean, purr | ∞ | getting going |
+| Clarity | gamma | 40 Hz | 400 / 520 Hz, pulsing on both | rain, purr | ∞ | alert work |
 
 The table is `docs/js/core/presets.js`. Each preset also sets its timbre, whether the pad plays, its end fade (20 to 90 s) and whether a soft chime closes the session (Meditate, Focus, Energise and Clarity). Keys 1 to 8 pick presets in this order. On a touch device playing through speakers the carrier never drops below 400 Hz, because small speakers reproduce little beneath it.
 
@@ -48,18 +50,18 @@ A collapsed section below the timer. Any change here turns the preset chip to Cu
 
 Every sound is generated in the browser when you press play. There are no audio files. Rain is filtered noise with individual drops; the ocean is a slow surf bed with waves that swell, crash and wash out, and every crash rolls a wave across the scene; the purr is a 26 Hz rumble shaped by a breath cycle.
 
-**Mix.** A Volume slider, then Tone, Rain, Ocean and Purr, each with a mute button. Presets set the sliders and also how heavy the rain falls and how big the waves are; those two live under Fine tuning as Rainfall and Sea. The sliders set how loud each layer is. The Purr row carries its own disclosure: "A ~26 Hz comfort rumble, not part of the tuning." It sits at zero in every preset except Cat nap.
+**Mix.** A Volume slider, then Tone, Rain, Ocean and Purr, each with a mute button. Presets set the sliders and also how heavy the rain falls and how big the waves are; those two live under Fine tuning as Rainfall and Sea. The sliders set how loud each layer is. The Purr row carries its own disclosure: "A ~26 Hz comfort rumble, not part of the tuning." Every preset purrs; Cat nap purrs most.
 
-**Cats.** Now and then a cat arrives along the bottom edge: black, orange tabby, grey or calico; sitting, loafing, sleeping or walking across. The first visit comes 20 to 40 seconds into a session, later ones every 45 seconds to two and a half minutes, with longer gaps when nothing is playing and shorter ones during Cat nap. At most two are present at once, one on narrow screens. Tap or click a cat to pet it: it narrows its eyes, hearts rise, a short purr sounds if you are playing, and it stays a little longer. Press C to pet the newest cat, or to call one when none is about. About & safety keeps a count of cats spotted, with a small toast at 1, 10, 25, 50 and 100. Cats always sit beneath the controls and never cover them.
+**Cats.** Now and then a cat arrives along the bottom edge: black, orange tabby, grey or calico; sitting, loafing, sleeping or walking across. Cats come in company: the first visit comes 4 to 9 seconds into a session and brings a friend a moment later, so two or more are usually about; later visits come every 20 seconds to a minute, with longer gaps when nothing is playing and shorter ones during Cat nap. Walking cats chase each other across with a little hop. Up to three are present at once, two on narrow screens. While a purr is audible, two large cell-shaded cats also frolic quietly in the background behind the controls (batting a ball of yarn, swishing tails, kneading); they fade in with the purr, fade out when it stops, rest in Still mode, and hide with Scene off or Cats off. Tap or click a cat to pet it: it narrows its eyes, hearts rise, a short purr sounds if you are playing, and it stays a little longer. Press C to pet the newest cat, or to call one when none is about. About & safety keeps a count of cats spotted, with a small toast at 1, 10, 25, 50 and 100. Cats always sit beneath the controls and never cover them.
 
 **Turning things off.** Rain, Ocean or Purr: slide to zero or tap mute (M mutes everything, again restores). Cats: Settings, Cats. The animated sea: Settings, Scene, Off. Motion only: Settings, Still mode. To keep the ambience after the tone has finished, choose "After the timer: Keep rain and ocean".
 
 ## Reassuring by design
 
-- **Quiet by default.** At every preset's defaults the tone peaks around −22 dBFS, and the tests hold every preset between −26 and −18. A limiter and a −1 dBFS ceiling mean nothing clips even with every slider at the top. Volume starts at 70 %.
+- **Quiet by default.** Volume starts at 45 %. At every preset's defaults the tone peaks around −31 to −35 dBFS, and the tests hold every preset between −36 and −26. A limiter and a −1 dBFS ceiling mean nothing clips even with every slider at the top.
 - **Long fades.** Play fades in over 1.5 s, pause over 0.6 s, stop over 2 s; preset changes glide over about 2 s; every slider move is a ramp. The timer ends with the preset's 20 to 90 s fade and, where set, a soft two-note chime.
 - **No modals** except the first-run card. Everything else is a toast or an inline note. A full-screen "Tap anywhere to let sound through" appears only when the browser blocks sound until a tap.
-- **Timer.** None, 10, 15, 20, 30, 45, 60 or 90 minutes, or Custom from 1 to 480. The choice is remembered per preset. "After the timer" is Fade out or Keep rain and ocean. Quiet announcements at five minutes and one minute. If you reload with more than a minute left, a toast offers "Resume your session? 12 min left"; nothing plays until you tap.
+- **Timer.** Every preset plays until you stop it (∞) by default. The long choices come first, 12 h, 6 h and 2 h, then 10, 15, 20, 30, 45, 60 or 90 minutes, or Custom from 1 minute to 12 hours. The choice is remembered per preset. "After the timer" is Fade out or Keep rain and ocean. Quiet announcements at five minutes and one minute. If you reload with more than a minute left, a toast offers "Resume your session? 12 min left"; nothing plays until you tap.
 - **Night dim.** During Sleep and Rest the screen dims after a minute without input. Any touch or key restores it. On by default; off in Settings.
 - **Still mode** stops the waves, the rain streaks and walking cats. By default it follows your device's reduced-motion setting, live.
 - **Scene off** removes the animated sky and sea. Nothing on screen is driven by the beat or the carrier, nothing flashes, and no periodic change of colour or brightness is faster than ten seconds. The only quicker movement is a cat's tail or walk, and Still mode stops those.

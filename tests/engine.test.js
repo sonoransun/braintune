@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from '../docs/js/core/state.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createEngine, STATES } from '../docs/js/audio/engine.js';
@@ -9,6 +10,7 @@ import { mulberry32 } from '../docs/js/core/rng.js';
 import { createContextFactory, settle } from './helpers/fake-audio.js';
 
 const T0 = 1_700_000_000_000;
+const DEFAULT_MASTER = DEFAULT_SETTINGS.mix.master; // the engine starts from the store's default volume
 const near = (actual, expected, tol, what = 'value') =>
   assert.ok(Math.abs(actual - expected) <= tol, `${what} ${actual} is not within ${tol} of ${expected}`);
 const DESK = { listening: 'headphones', device: 'desktop' };
@@ -85,7 +87,7 @@ test('unlock: audio session → context → graph → resume → "running", with
   assert.equal(factory.contexts.length, 1);
 });
 
-test('play(calm): starting → playing, master S-curve 0 → masterGain(0.7) over 1.5 s, ambience ready as buffers resolve', async (t) => {
+test('play(calm): starting → playing, master S-curve 0 → masterGain(DEFAULT_MASTER) over 1.5 s, ambience ready as buffers resolve', async (t) => {
   const { engine, states, events, advance, ctx, masterGainNode } = harness(t);
   const started = engine.play({ preset: calm() });
   assert.equal(engine.getState().state, 'starting');
@@ -95,14 +97,14 @@ test('play(calm): starting → playing, master S-curve 0 → masterGain(0.7) ove
   assert.equal(start.value, 0);
   const ramps = calls.filter((c) => c.method === 'linearRampToValueAtTime');
   assert.equal(ramps.length, 32);
-  near(ramps.at(-1).value, masterGain(0.7), 1e-12, 'fade target');
+  near(ramps.at(-1).value, masterGain(DEFAULT_MASTER), 1e-12, 'fade target');
   near(ramps.at(-1).time - start.time, 1.5, 1e-9, 'fade length');
   const mid = ramps[15].value;
-  near(mid, masterGain(0.7) / 2, 1e-6, 'S-curve midpoint');
-  assert.ok(ramps[3].value < (masterGain(0.7) * 4) / 32, 'S-curve starts gently');
+  near(mid, masterGain(DEFAULT_MASTER) / 2, 1e-6, 'S-curve midpoint');
+  assert.ok(ramps[3].value < (masterGain(DEFAULT_MASTER) * 4) / 32, 'S-curve starts gently');
   await advance(1600);
   assert.deepEqual(states, ['starting', 'playing']);
-  assert.deepEqual([...events.ready].sort(), ['ocean', 'rain'], 'calm enables rain and ocean, not purr');
+  assert.deepEqual([...events.ready].sort(), ['ocean', 'purr', 'rain'], 'the v2 default mix runs rain, ocean and purr');
   const s = engine.getState();
   assert.equal(s.mode, 'binaural');
   assert.equal(s.carrierHz, 256);
@@ -136,7 +138,8 @@ test('applyPreset(sleep): carrier ramps exponentially, the beat glides 6 → 2 H
   assert.equal(engine.getState().mode, 'binaural');
   assert.equal(engine.getState().presetId, 'sleep');
   await advance(100);
-  assert.deepEqual(engine.getLevels(), { master: masterGain(0.7), tone: layerGain(0.5), rain: 0, ocean: layerGain(0.8), purr: 0 });
+  const mix = getPreset('sleep').mix;
+  assert.deepEqual(engine.getLevels(), { master: masterGain(DEFAULT_MASTER), tone: layerGain(mix.tone), rain: layerGain(mix.rain), ocean: layerGain(mix.ocean), purr: layerGain(mix.purr) });
 });
 
 test('a master change after armTimer re-arms the end fade from the new level, ending at the same time', async (t) => {
@@ -149,7 +152,7 @@ test('a master change after armTimer re-arms the end fade from the new level, en
   near(planned.at(-1).time, endT, 0.02, 'fade ends at the timer end');
   assert.equal(planned.at(-1).value, 0);
   const planStart = param.calls.find((c) => c.method === 'setValueAtTime' && c.time > endT - 31);
-  near(planStart.value, masterGain(0.7), 1e-12, 'planned from the current master');
+  near(planStart.value, masterGain(DEFAULT_MASTER), 1e-12, 'planned from the current master');
   const before = param.calls.length;
   engine.setMaster(0.5);
   const since = param.since(before);
@@ -194,7 +197,7 @@ test('pause fades 0.6 s then suspends; resume runs the context and fades in over
   assert.equal(await resumed, true);
   assert.equal(ctx().state, 'running');
   const up = param.since(beforeResume).filter((c) => c.method === 'linearRampToValueAtTime');
-  near(up.at(-1).value, masterGain(0.7), 1e-12);
+  near(up.at(-1).value, masterGain(DEFAULT_MASTER), 1e-12);
   near(up.at(-1).time - ctx().currentTime, 0.81, 1e-9, '0.8 s resume fade');
   await advance(900);
   assert.deepEqual(states, ['starting', 'playing', 'pausing', 'paused', 'starting', 'playing']);
@@ -273,7 +276,7 @@ test('cancelTimer during the end fade restores the level and the playing state',
   engine.cancelTimer();
   assert.equal(engine.getState().state, 'playing');
   const restore = masterGainNode().gain.since(before).filter((c) => c.method === 'linearRampToValueAtTime');
-  near(restore.at(-1).value, masterGain(0.7), 1e-12, 'master restored');
+  near(restore.at(-1).value, masterGain(DEFAULT_MASTER), 1e-12, 'master restored');
   assert.equal(engine.timerRemainingMs(), 0);
   await advance(4000);
   assert.equal(engine.getState().state, 'playing', 'no end after cancel');
@@ -339,7 +342,7 @@ test('rebuild() closes the context, makes a second one and fades back in over 0.
   const calls = masterGainNode().gain.calls;
   const lastHold = calls.findLastIndex((c) => c.method === 'cancelAndHoldAtTime');
   const ramps = calls.slice(lastHold).filter((c) => c.method === 'linearRampToValueAtTime');
-  near(ramps[31].value, masterGain(0.7), 1e-12, 'fade-in target');
+  near(ramps[31].value, masterGain(DEFAULT_MASTER), 1e-12, 'fade-in target');
   near(ramps[31].time - ramps[0].time, 0.8 - 0.8 / 32, 1e-9, '0.8 s rebuild fade');
   await advance(900);
   assert.equal(engine.getState().state, 'playing');
@@ -420,7 +423,7 @@ test('purrCue plays only while running and audible, through a dedicated gain int
   await advance(100);
   assert.equal(await cued, true);
   const master = ctx().nodesOf('gain')[0];
-  const cueGain = ctx().nodesOf('gain').find((g) => g.isConnectedTo(master) && g.gain.calls.some((c) => c.value === 0.25));
+  const cueGain = ctx().nodesOf('gain').find((g) => g.isConnectedTo(master) && g.gain.calls.some((c) => c.method === 'linearRampToValueAtTime' && c.value === 0.25));
   assert.ok(cueGain, 'cue gain found, wired to the master, peaking at 0.25');
   const ramps = cueGain.gain.calls.filter((c) => c.method === 'linearRampToValueAtTime');
   assert.equal(ramps.at(-1).value, 0);
