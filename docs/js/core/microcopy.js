@@ -30,6 +30,7 @@ export const STRINGS = deepFreeze({
   status: {
     idle: { sub: 'Ready when you are.', returning: 'Welcome back.' },
     starting: { sub: 'Settling in…', announce: 'Playing {preset}, {beat} hertz, {band}.' },
+    glide: '{preset} · easing {from} → {to}',
     playing: {
       headphones: 'Breathe with the glow.',
       speakers: 'Playing out loud.',
@@ -51,9 +52,10 @@ export const STRINGS = deepFreeze({
     skipLink: 'Skip to controls',
     settings: 'Settings',
     catsGroup: 'Visiting cats',
-    restartSound: 'Sound stopped? Restart sound',
+    restartSound: 'Restart sound',
     blockedOverlay: 'Tap anywhere to let sound through',
-    autoplayOverlay: 'Tap anywhere to start {preset}',
+    autoplayOverlay: 'Tap anywhere to begin {preset}',
+    autoplayContinue: 'Tap anywhere to continue {preset} · {time} left',
     interruptedOverlay: 'Sound paused while you were away. Tap to continue.',
     resumePrompt: 'Resume your session? {time} left',
     resume: 'Resume',
@@ -68,7 +70,7 @@ export const STRINGS = deepFreeze({
     rain: 'Rain',
     ocean: 'Ocean',
     purr: 'Purr',
-    purrNote: 'A ~26 Hz comfort rumble, not part of the tuning.',
+    purrNote: 'A low purr near 26 Hz, there for comfort. It plays no part in the beat.',
     mute: 'Mute {layer}',
     unmute: 'Unmute {layer}',
   },
@@ -95,7 +97,10 @@ export const STRINGS = deepFreeze({
       speakers: { label: 'Speakers', description: 'A soft pulsing tone that works out loud' },
       headphones: { label: 'Headphones', description: 'Each ear hears a slightly different tone: the full binaural effect' },
     },
-    safety: `We start quiet. ${SAFETY}`,
+    helpQuestion: 'What would help right now?',
+    help: { sleep: 'Drift off', calm: 'Settle', focus: 'Focus' },
+    quietNote: "Sound begins quietly when you tap Let's begin and fades in over a few seconds.",
+    safety: SAFETY,
     button: "Let's begin",
   },
   settings: {
@@ -108,7 +113,7 @@ export const STRINGS = deepFreeze({
     },
     stereoCheck: { label: 'Check left/right', description: 'Plays a short tone in the left ear, then the right.', button: 'Play check' },
     cats: { label: 'Cats', description: 'Now and then a cat wanders by. Tap one to pet it.' },
-    autoplay: { label: 'Play on open', description: 'Starts Sleep as soon as Brain Tune opens. Some browsers wait for a first tap.' },
+    autoplay: { label: 'Play on open', description: 'Begins your last preset as soon as Brain Tune opens. Some browsers wait for a tap first.' },
     keepAwake: {
       label: 'Keep screen awake',
       description: 'Stops the screen turning off during a session.',
@@ -118,7 +123,7 @@ export const STRINGS = deepFreeze({
     stillMode: { label: 'Still mode', description: 'Stops the waves, rain and walking cats. Follows your device when reduced motion is on.' },
     scene: { label: 'Scene', description: 'The animated sky and sea behind the controls.', full: 'Full', off: 'Off' },
     haptics: { label: 'Haptics', description: 'A light tap when you change something.' },
-    nightDim: { label: 'Night dim', description: 'During Sleep, Deep sleep and Rest, the screen dims after a minute of quiet.' },
+    nightDim: { label: 'Night dim', description: 'In Sleep, Deep sleep and Rest the screen dims after a minute of stillness and settles further after five.' },
     shortcuts: {
       label: 'Keyboard shortcuts',
       description: 'Space or K plays and pauses. 1 to 9 pick a preset. M mutes, H switches listening, T changes the theme, C calls a cat, ? opens About.',
@@ -126,10 +131,12 @@ export const STRINGS = deepFreeze({
     addToHome: {
       label: 'Add to home screen',
       description: 'Open Brain Tune like an app, offline too.',
-      generic: "Use your browser's Add to Home Screen / Install option",
+      generic: "Use your browser's Add to Home Screen or Install option",
+      apple: 'In Safari: Share, then Add to Home Screen.',
       button: 'Install',
     },
     reset: { label: 'Reset all settings', description: 'Back to the quiet defaults.', button: 'Reset' },
+    more: { label: 'More settings' },
   },
   fineTuning: {
     heading: 'Fine tuning',
@@ -142,7 +149,8 @@ export const STRINGS = deepFreeze({
     sea: 'Sea',
     rainfallLevels: ['drizzle', 'steady', 'heavy', 'downpour'],
     seaLevels: ['glassy', 'gentle', 'rolling', 'heavy swell'],
-    timbres: { sine: 'Sine', velvet: 'Velvet', glass: 'Glass', warm: 'Warm' },
+    timbres: { sine: 'Sine', velvet: 'Velvet', warm: 'Warm', amber: 'Amber', glass: 'Glass', bell: 'Bell' },
+    padStyle: { label: 'Pad style', auto: 'Auto', drone: 'Drone', canon: 'Canon' },
     styles: { auto: 'Auto', binaural: 'Binaural', monaural: 'Wavering', isochronic: 'Pulsing' },
     gammaNote: 'At 40 Hz the pulse is a fast flutter by nature.',
     attune: { start: 'Find your pitch', hint: 'Tap when it feels right', cancel: 'Never mind', done: 'Pitch set to {pitch}' },
@@ -150,8 +158,11 @@ export const STRINGS = deepFreeze({
       title: 'What do these do?',
       beat: 'Beat is the slow rhythm your brain is invited to follow, in cycles per second. Lower feels sleepier, higher more alert.',
       pitch: 'Pitch is the tone that carries the beat. It does not change the tuning, so choose whatever sounds comfortable.',
-      timbre: 'Timbre is the colour of the tone, from a plain sine to a warmer, richer voice.',
-      pad: 'Pad adds a quiet fifth, octave and sub beneath the tone.',
+      timbre: 'Timbre is the colour of the tone. Sine is plain, Velvet and Warm are rounder, Amber is octave-rich, Glass and Bell are sparse and clear.',
+      pad:
+        'Pad adds a quiet octave and fifth above the tone and a sub below it, all in pure ratios. At low pitches the fifth sits an octave higher, and the voices enter one at a time over the first minute.',
+      padStyle:
+        'Drone holds the harmony and lets it breathe. Canon adds two slow voices, one answering the other a few notes later, as in a round. Auto uses Canon in Meditate and Calm.',
       beatStyle:
         'Beat style chooses how the beat is made. Binaural needs headphones. Pulsing works out loud. Wavering sums both tones in the centre. Auto picks for you.',
       rainfall: 'Rainfall sets how hard the rain falls; the Rain slider sets how loud it is.',
@@ -178,15 +189,18 @@ export const STRINGS = deepFreeze({
     version: 'Version',
     safety: SAFETY,
     monoAudio: 'Binaural tones need stereo. If your device plays Mono Audio, choose Speakers.',
-    purr: 'Purr is a ~26 Hz comfort rumble, not part of the tuning.',
+    tuning:
+      'Pitch, pad and chime are tuned in simple whole-number ratios, which sound smooth because their overtones line up. No particular key or frequency is special on its own.',
+    canon:
+      "In Canon the pad's two slow voices follow simple rules of counterpoint: the second voice imitates the first, sometimes upside down, slower or sooner, and every pair of notes heard together forms a consonant interval.",
     privacy: 'Nothing leaves your device.',
     storageNote: 'This browser is not keeping site data, so settings last until you close the page.',
   },
   cats: {
     label: 'A {coat} cat {pose}',
     petting: 'A {coat} cat, purring',
-    poses: { sit: 'sitting nearby', loaf: 'resting nearby', walk: 'walking by', sleep: 'sleeping nearby' },
-    coats: { black: 'black', orangeTabby: 'orange tabby', grey: 'grey', calico: 'calico' },
+    poses: { sit: 'sitting nearby', loaf: 'resting nearby', walk: 'walking by', sleep: 'sleeping nearby', peek: 'peeking in' },
+    coats: { black: 'black', orangeTabby: 'orange tabby', grey: 'grey', calico: 'calico', tuxedo: 'tuxedo' },
     milestone: "You've spotted {n} cats. They like you.",
     called: 'A cat is on its way.',
     none: 'No cat nearby just now.',
@@ -207,6 +221,18 @@ export const STRINGS = deepFreeze({
 });
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+/** How close a pitch must be to a just stop, or to an equal-tempered note, to carry its name, cents. */
+const JUST_STOP_CENTS = 3;
+const NOTE_CENTS = 5;
+
+/** The just grid over A = 110 Hz as [hz, name] pairs, C3 to G5: C, D, E, F, G and A at 6/5, 4/3, 3/2, 8/5, 9/5 and 2 times the A below. */
+export const JUST_STOPS = deepFreeze([
+  [132, 'C3'], [440 / 3, 'D3'], [165, 'E3'], [176, 'F3'], [198, 'G3'], [220, 'A3'],
+  [264, 'C4'], [880 / 3, 'D4'], [330, 'E4'], [352, 'F4'], [396, 'G4'], [440, 'A4'],
+  [528, 'C5'], [1760 / 3, 'D5'], [660, 'E5'], [704, 'F5'], [792, 'G5'],
+]);
+
+const centsBetween = (hz, refHz) => 1200 * Math.log2(hz / refHz);
 
 function oneDecimal(x) {
   return String(Number(x.toFixed(1)));
@@ -215,7 +241,7 @@ function oneDecimal(x) {
 function nearestNote(hz) {
   const n = Math.round(12 * Math.log2(hz / 440)) + 69;
   const name = `${NOTE_NAMES[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
-  const cents = 1200 * Math.log2(hz / (440 * 2 ** ((n - 69) / 12)));
+  const cents = centsBetween(hz, 440 * 2 ** ((n - 69) / 12));
   return { name, cents };
 }
 
@@ -229,11 +255,13 @@ export function formatHz(hz) {
   return Number.isFinite(hz) ? `${oneDecimal(hz)} Hz` : '—';
 }
 
-/** '440 Hz · A4' within ±5 cents of a note, otherwise '256 Hz · near C4'. */
+/** '264 Hz · C4' within ±3 cents of a JUST_STOPS pitch; otherwise '440 Hz · A4' within ±5 cents of an equal-tempered note, else '256 Hz · near C4'. */
 export function formatPitch(hz) {
   if (!(Number.isFinite(hz) && hz > 0)) return '—';
+  const stop = JUST_STOPS.find(([stopHz]) => Math.abs(centsBetween(hz, stopHz)) <= JUST_STOP_CENTS);
+  if (stop) return `${formatHz(hz)} · ${stop[1]}`;
   const { name, cents } = nearestNote(hz);
-  return `${formatHz(hz)} · ${Math.abs(cents) <= 5 ? name : `near ${name}`}`;
+  return `${formatHz(hz)} · ${Math.abs(cents) <= NOTE_CENTS ? name : `near ${name}`}`;
 }
 
 /** 0.7 → '70%'. */
@@ -262,12 +290,16 @@ export function formatMinutes(n) {
   return m === 0 ? fill(STRINGS.timer.hours, { n: h }) : fill(STRINGS.timer.hoursMinutes, { h, m });
 }
 
-/** Orb label, status line, sub-line and live announcement for an engine state (§7.4 table). */
+/** Orb label, status line, sub-line and live announcement for an engine state (§7.4 table); while glide.active the status reads 'Sleep · easing 6 → 2 Hz' and the start announcement names glide.fromHz. */
 export function statusLine(state, ctx = {}) {
-  const { presetName = '', beatHz, band = '', listening = 'speakers', remainingMs = null, returning = false, mark = null } = ctx;
+  const { presetName = '', beatHz, band = '', listening = 'speakers', remainingMs = null, returning = false, mark = null, glide = null } = ctx;
   const S = STRINGS.status;
   const O = STRINGS.orb;
-  const title = Number.isFinite(beatHz) ? `${presetName} · ${formatHz(beatHz)}` : presetName;
+  const gliding = Boolean(glide?.active) && Number.isFinite(glide.fromHz) && Number.isFinite(glide.toHz);
+  const title = gliding
+    ? fill(S.glide, { preset: presetName, from: oneDecimal(glide.fromHz), to: formatHz(glide.toHz) })
+    : Number.isFinite(beatHz) ? `${presetName} · ${formatHz(beatHz)}` : presetName;
+  const startHz = gliding ? glide.fromHz : beatHz;
   const idle = { label: O.begin, status: title, sub: returning ? S.idle.returning : S.idle.sub, announce: null, timeLeft: null };
   switch (state) {
     case 'starting':
@@ -275,7 +307,7 @@ export function statusLine(state, ctx = {}) {
         ...idle,
         label: O.pause,
         sub: S.starting.sub,
-        announce: fill(S.starting.announce, { preset: presetName, beat: Number.isFinite(beatHz) ? oneDecimal(beatHz) : '', band }),
+        announce: fill(S.starting.announce, { preset: presetName, beat: Number.isFinite(startHz) ? oneDecimal(startHz) : '', band }),
       };
     case 'playing': {
       const feel = listening === 'headphones' ? S.playing.headphones : S.playing.speakers;

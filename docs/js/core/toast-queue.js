@@ -45,6 +45,11 @@ export function createToastQueue({ now, max = 3 } = {}) {
   return { push, dismiss, tick, list };
 }
 
+/** Whether a toast waits for the next touch or key press: a sticky one during a sleepy session or while the screen is dimmed (v0.4 spec §5.1.9). */
+export function shouldDeferToast({ sticky = false, mood = null, dimmed = false } = {}) {
+  return sticky === true && (mood === 'sleepy' || dimmed === true);
+}
+
 /** Creates a live-region announcement gate: push(text) is false for identical text within dedupeMs. */
 export function createAnnounceQueue({ now, dedupeMs = 1000 } = {}) {
   requireClock(now, 'createAnnounceQueue');

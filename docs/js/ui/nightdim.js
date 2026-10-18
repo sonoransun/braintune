@@ -1,16 +1,20 @@
-// Night dim (plan §7.7): during Sleep or Rest, while playing and enabled, html[data-dim=night] after 60 s without
-// activity; never while a panel control has focus or a dialog is open; any activity restores within 300 ms (CSS).
+// Night dim (plan §7.7, v0.4 spec §5.1.8): during Sleep, Deep sleep or Rest, while playing and enabled, html[data-dim]
+// goes to 'night' after a minute without activity and to 'deep' after five (core/dim-model.js); never while a panel
+// control has focus or a dialog is open; any activity returns it to 'none' (CSS restores within 300 ms).
 
-const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'focusin', 'touchstart', 'selectionchange'];
+import { DIM_STAGES, dimStage, nextDimInMs } from '../core/dim-model.js';
+
+// wheel: a desk user scrolling the panel with a trackpad or mouse wheel is active even if the pointer never moves.
+const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'focusin', 'touchstart', 'wheel', 'selectionchange'];
 const ELIGIBLE_PRESETS = new Set(['sleep', 'deep', 'rest']);
 
-/** Creates the night-dim controller for the <html> element. */
+/** Creates the night-dim controller for the <html> element; onChange(stage) runs on every stage change. */
 export function createNightDim({
-  root, isPlaying, getPresetId, isEnabled, doc = root.ownerDocument, panelEl = doc.getElementById('panel'),
-  idleMs = 60000, now = () => Date.now(), setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (id) => clearTimeout(id),
+  root, isPlaying, getPresetId, isEnabled, onChange, doc = root.ownerDocument, panelEl = doc.getElementById('panel'),
+  stages = DIM_STAGES, now = () => Date.now(), setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (id) => clearTimeout(id),
 }) {
   let running = false;
-  let dimmed = false;
+  let stage = 'none';
   let timer = null;
   let lastActivity = now();
 
@@ -21,10 +25,11 @@ export function createNightDim({
   };
   const eligible = () => couldDim() && !doc.querySelector('dialog[open]') && !panelControlFocused();
 
-  function setDim(on) {
-    if (dimmed === on) return;
-    dimmed = on;
-    root.dataset.dim = on ? 'night' : 'none';
+  function setStage(next) {
+    if (stage === next) return;
+    stage = next;
+    root.dataset.dim = next;
+    onChange?.(next);
   }
 
   function clear() {
@@ -37,21 +42,27 @@ export function createNightDim({
     timer = setTimer(check, ms);
   }
 
+  /** Moves to the stage the stillness has earned and waits for the next one; while dimming is held off, looks again a minute later. */
   function check() {
     timer = null;
+    if (!couldDim()) return;
     const idleFor = now() - lastActivity;
-    if (idleFor < idleMs) {
-      schedule(idleMs - idleFor);
+    const due = dimStage(idleFor, stages);
+    if (due !== 'none' && !eligible()) {
+      schedule(stages.night);
       return;
     }
-    if (eligible()) setDim(true);
-    else if (couldDim()) schedule(idleMs);
+    setStage(due);
+    const wait = nextDimInMs(idleFor, stages);
+    if (wait !== null) schedule(wait);
   }
 
+  /** Restores the screen; a pending check stays only while it is due before the next minute of stillness ends. */
   function onActivity() {
+    const wasDimmed = stage !== 'none';
     lastActivity = now();
-    if (dimmed) setDim(false);
-    if (running && timer === null && couldDim()) schedule(idleMs);
+    setStage('none');
+    if (running && couldDim() && (timer === null || wasDimmed)) schedule(stages.night);
   }
 
   /** Re-checks eligibility after a state, preset or setting change. */
@@ -59,10 +70,10 @@ export function createNightDim({
     if (!running) return;
     if (!couldDim()) {
       clear();
-      setDim(false);
+      setStage('none');
       return;
     }
-    if (timer === null) schedule(idleMs);
+    if (timer === null && stage !== 'deep') schedule(stages.night);
   }
 
   return {
@@ -78,9 +89,10 @@ export function createNightDim({
       running = false;
       for (const type of ACTIVITY_EVENTS) doc.removeEventListener(type, onActivity);
       clear();
-      setDim(false);
+      setStage('none');
     },
     refresh,
-    isDimmed: () => dimmed,
+    /** 'none' | 'night' | 'deep'. */
+    stage: () => stage,
   };
 }

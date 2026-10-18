@@ -57,6 +57,27 @@ test('gateParams: 2 Hz -> .2/.85, 40 Hz -> .35/.45, clamped outside 12-30 Hz, mo
   }
 });
 
+test('gateParams gentle: 2 Hz -> .30/.60, 40 Hz -> .35/.45, monotone between, same duty; the default is unchanged', () => {
+  const gentle = { gentle: true };
+  assert.deepEqual(gateParams(2, gentle), { duty: 0.5, ramp: 0.3, depth: 0.6 });
+  assert.deepEqual(gateParams(12, gentle), { duty: 0.5, ramp: 0.3, depth: 0.6 });
+  assert.deepEqual(gateParams(30, gentle), { duty: 0.5, ramp: 0.35, depth: 0.45 });
+  assert.deepEqual(gateParams(40, gentle), { duty: 0.5, ramp: 0.35, depth: 0.45 });
+  near(20 * Math.log10(1 / (1 - gateParams(6, gentle).depth)), 7.96, 0.01, 'gentle swing at 6 Hz, dB');
+  near(20 * Math.log10(1 / (1 - gateParams(6).depth)), 16.48, 0.01, 'standard swing at 6 Hz, dB');
+  let prev = gateParams(0.5, gentle);
+  for (let hz = 1; hz <= 60; hz += 0.5) {
+    const g = gateParams(hz, gentle);
+    assert.ok(g.ramp >= prev.ramp, `gentle ramp decreases at ${hz} Hz`);
+    assert.ok(g.depth <= prev.depth, `gentle depth increases at ${hz} Hz`);
+    assert.ok(g.depth <= gateParams(hz).depth && g.ramp >= gateParams(hz).ramp, `gentle is never harder than standard at ${hz} Hz`);
+    assert.ok(g.ramp <= g.duty && g.duty + g.ramp <= 1, `gate shape constraints at ${hz} Hz`);
+    prev = g;
+  }
+  assert.deepEqual(gateParams(6, { gentle: false }), gateParams(6));
+  assert.deepEqual(gateParams(6, {}), gateParams(6));
+});
+
 test('renderGatePeriod: round(sampleRate / hz) finite samples from the floor to a plateau of 1', () => {
   const params = gateParams(10);
   const buf = renderGatePeriod(48000, 10, params);

@@ -1,14 +1,17 @@
-// The tone layer (§5 tone.js, §6.1, §6.2, §6.4 of the plan): a carrier ConstantSource and a
-// half-beat ConstantSource drive every oscillator (intrinsic frequency 0), so the beat stays
-// exact through carrier glides and the attune sweep. Three voice groups share the carrier:
-// binaural (sines hard-panned, ±Δ/2), monaural (both sines centred) and isochronic (a timbred
-// carrier through a raised-cosine gate at Δ), plus a quiet pad (fifth, octave, sub) with two
-// very slow LFOs. Mode changes are 1.2 s equal-power crossfades; timbre changes crossfade to a
-// second oscillator; beat changes ramp the half-beat offset and the gate's playbackRate.
+// The tone layer (§5 tone.js, §6.1, §6.2, §6.4 of the plan; v0.4 spec §3.5): a carrier ConstantSource
+// and a half-beat ConstantSource drive every oscillator (intrinsic frequency 0), so the beat stays
+// exact through carrier glides and the attune sweep. Three voice groups share the carrier: binaural
+// (sines hard-panned, ±Δ/2), monaural (both sines centred) and isochronic (a timbred carrier through
+// a low-pass at carrierLowpassRatio(timbre)·f and a raised-cosine gate at Δ), plus a quiet pad voiced
+// by register (core/voicing.js) whose bus level and low-pass breathe along 1/f curves (core/fractal.js
+// via audio/texture.js); no LFO nodes; slot gains change only by 6 s crossfades and the entry swells.
+// Mode changes are 1.2 s equal-power crossfades; timbre changes crossfade to a second oscillator; beat
+// changes ramp the half-beat offset and the gate's playbackRate.
 
 import { VOICE_PEAK, PAD_DB, carrierTrim, dbToGain } from '../core/levels.js';
-import { timbreCoefficients, timbreGainTrim } from '../core/timbres.js';
+import { timbreCoefficients, timbreGainTrim, carrierLowpassRatio } from '../core/timbres.js';
 import { gateParams, gatePlaybackRate } from '../core/gate.js';
+import { PAD_SLOTS, PAD_ENTRIES, VOICING_CROSSFADE_SECONDS, voicingFor, canonVoicingFor } from '../core/voicing.js';
 import { holdParam, glideTo, fade, crossfade } from './automation.js';
 
 const MODES = Object.freeze(['binaural', 'monaural', 'isochronic']);
@@ -18,15 +21,8 @@ const GATE_RATE_TAU = 0.3;
 const GATE_SWAP_SECONDS = 0.6;
 const TIMBRE_SWAP_SECONDS = 0.8;
 const PAD_SWITCH_SECONDS = 1.2;
-const LP_CARRIER = Object.freeze({ ratio: 4, Q: 0.6 });
-const PAD_VOICES = Object.freeze([
-  { ratio: 1.5, gain: 0.5, timbred: true },
-  { ratio: 2, gain: 0.6, timbred: true },
-  { ratio: 0.5, gain: 0.35, timbred: false },
-]);
-const PAD_LP = Object.freeze({ hz: 1800, Q: 0.7 });
-const PAD_LFO_FILTER = Object.freeze({ hz: 0.08, depthHz: 300 });
-const PAD_LFO_AMP = Object.freeze({ hz: 0.06, depth: 0.19 });
+const LP_CARRIER_Q = 0.6;
+const PAD_LP_Q = 0.7;
 const ATTUNE = Object.freeze({ from: 180, to: 520, seconds: 60, approachSeconds: 1, legsAhead: 2 });
 const ATTUNE_TRIM_TAU = 1;
 
@@ -40,7 +36,11 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
     setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (handle) => clearTimeout(handle),
   } = initial;
   if (!MODES.includes(mode)) throw new RangeError(`tone: unknown mode "${mode}"`);
-  const state = { carrierHz, beatHz, mode, timbre, pad, attune: null, started: false };
+  const voicing = voicingFor(carrierHz);
+  const state = {
+    carrierHz, beatHz, mode, timbre, pad, attune: null, started: false,
+    register: voicing.register, lpHz: voicing.lpHz, canon: false, slotTargets: Object.fromEntries(PAD_SLOTS.map(({ name }) => [name, 0])),
+  };
   const waves = new Map();
   const sources = [];
   const now = () => ctx.currentTime + LEAD;
@@ -114,11 +114,11 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
   oscR.connect(vM);
   vM.connect(modeGains.monaural);
 
-  // Isochronic voice: timbred carrier → lpC (4·f) → gate (Gain 0 driven by the looped gate period).
+  // Isochronic voice: timbred carrier → lpC (4·f, 7·f for bell) → gate (Gain 0 driven by the looped gate period).
   const carrierVoice = createTimbrePair(ctx, carrier, 1, waveFor(timbre), sources);
   const vIso = gain(VOICE_PEAK * trim0 * timbreGainTrim(timbre));
-  const lpC = lowpass(0, LP_CARRIER.Q);
-  const lpDrive = gain(LP_CARRIER.ratio);
+  const lpC = lowpass(0, LP_CARRIER_Q);
+  const lpDrive = gain(carrierLowpassRatio(timbre));
   carrier.connect(lpDrive);
   lpDrive.connect(lpC.frequency);
   const gateNode = gain(0);
@@ -128,40 +128,35 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
   gateNode.connect(modeGains.isochronic);
   const gateDrive = createGateDrive(ctx, cache, gateNode.gain);
 
-  // Pad: fifth and octave in the timbre, sub as a sine, through a slowly moving low-pass at −14 dB.
+  // Pad: five slots (fifth and octave in the timbre), each with a level silent until voiced, summed in padInput
+  // (the canon voices join there) → low-pass → −14 dB → on/off. Only the texture moves vPad and the low-pass.
   const padGain = dbToGain(PAD_DB);
-  const lpPad = lowpass(PAD_LP.hz, PAD_LP.Q);
+  const padInput = gain(1);
+  const lpPad = lowpass(state.lpHz, PAD_LP_Q);
   const vPad = gain(padGain);
   const padOn = gain(pad ? 1 : 0);
+  padInput.connect(lpPad);
   lpPad.connect(vPad);
   vPad.connect(padOn);
   padOn.connect(bus);
   const padPairs = [];
-  for (const voice of PAD_VOICES) {
-    const level = gain(voice.gain);
-    level.connect(lpPad);
-    if (voice.timbred) {
-      const pair = createTimbrePair(ctx, carrier, voice.ratio, waveFor(timbre), sources);
+  const padLevels = {};
+  for (const slot of PAD_SLOTS) {
+    const level = gain(0);
+    level.connect(padInput);
+    padLevels[slot.name] = level.gain;
+    if (slot.timbred) {
+      const pair = createTimbrePair(ctx, carrier, slot.ratio, waveFor(timbre), sources);
       pair.output.connect(level);
       padPairs.push(pair);
     } else {
       const osc = sine();
-      const ratio = gain(voice.ratio);
-      carrier.connect(ratio);
-      ratio.connect(osc.frequency);
+      const drive = gain(slot.ratio);
+      carrier.connect(drive);
+      drive.connect(osc.frequency);
       osc.connect(level);
     }
   }
-  const lfoFilter = sine();
-  lfoFilter.frequency.value = PAD_LFO_FILTER.hz;
-  const lfoFilterDepth = gain(PAD_LFO_FILTER.depthHz);
-  lfoFilter.connect(lfoFilterDepth);
-  lfoFilterDepth.connect(lpPad.frequency);
-  const lfoAmp = sine();
-  lfoAmp.frequency.value = PAD_LFO_AMP.hz;
-  const lfoAmpDepth = gain(PAD_LFO_AMP.depth * padGain);
-  lfoAmp.connect(lfoAmpDepth);
-  lfoAmpDepth.connect(vPad.gain);
 
   function retargetTrims(hz, t, tau = TRIM_TAU) {
     const trim = carrierTrim(hz);
@@ -179,12 +174,36 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
     state.mode = next;
   }
 
-  /** Glides the carrier exponentially over `seconds` and retargets the loudness trims. */
+  /** Voices the pad for `hz` (canon: the canon voicing): a slot whose target changes fades linearly over `seconds` from `t`, the others are left alone (entries in flight survive); sets the low-pass the texture breathes around. */
+  function applyVoicing(hz, t, seconds, { canon = false } = {}) {
+    const v = canon ? canonVoicingFor(hz) : voicingFor(hz);
+    for (const { name } of PAD_SLOTS) {
+      if (v.gains[name] === state.slotTargets[name]) continue;
+      fade(padLevels[name], padLevels[name].value, v.gains[name], t, seconds, 'linear');
+      state.slotTargets[name] = v.gains[name];
+    }
+    Object.assign(state, { register: v.register, lpHz: v.lpHz, canon });
+  }
+
+  /** Entry swells from `at`: each sounding slot is pinned at 0, then rises (S-curve) at its PAD_ENTRIES time: octave at once, fifth or twelfth at 12 s, sub at 24 s, double at 40 s. */
+  function scheduleEntries(at) {
+    for (const { name } of PAD_SLOTS) {
+      const target = state.slotTargets[name];
+      if (!(target > 0)) continue;
+      const param = padLevels[name];
+      holdParam(param, at);
+      param.setValueAtTime(0, at);
+      fade(param, 0, target, at + PAD_ENTRIES[name].at, PAD_ENTRIES[name].seconds, 'scurve');
+    }
+  }
+
+  /** Glides the carrier exponentially over `seconds`, retargets the loudness trims and re-voices the pad (its slots move only when the register changes, over 6 s). */
   function setCarrier(hz, { seconds = 1.5 } = {}) {
     const t = now();
     glideTo(carrier.offset, hz, t, seconds, 'exp');
     retargetTrims(hz, t);
     state.carrierHz = hz;
+    applyVoicing(hz, t, VOICING_CROSSFADE_SECONDS, { canon: state.canon });
   }
 
   /** Ramps the beat linearly over `seconds` and retargets the gate's playback rate (τ 0.3 s). */
@@ -207,7 +226,7 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
     state.beatHz = toHz;
   }
 
-  /** Swaps the timbre on the isochronic carrier and the pad with 0.8 s oscillator crossfades. */
+  /** Swaps the timbre on the isochronic carrier and the pad with 0.8 s oscillator crossfades and moves the carrier low-pass to the timbre's ratio. */
   function setTimbre(name) {
     if (name === state.timbre) return;
     const wave = waveFor(name);
@@ -216,14 +235,17 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
     carrierVoice.setWave(wave, t, TIMBRE_SWAP_SECONDS);
     for (const pair of padPairs) pair.setWave(wave, t, TIMBRE_SWAP_SECONDS);
     retargetTrims(state.carrierHz, t);
+    glideTo(lpDrive.gain, carrierLowpassRatio(name), t, TRIM_TAU, 'target');
   }
 
-  /** Fades the pad in or out over 1.2 s. */
+  /** Fades the pad in or out over 1.2 s; turned on, its slots enter one by one again. */
   function setPad(on) {
     const next = Boolean(on);
     if (next === state.pad) return;
     state.pad = next;
-    fade(padOn.gain, padOn.gain.value, next ? 1 : 0, now(), PAD_SWITCH_SECONDS, next ? 'equalPowerIn' : 'equalPowerOut');
+    const t = now();
+    fade(padOn.gain, padOn.gain.value, next ? 1 : 0, t, PAD_SWITCH_SECONDS, next ? 'equalPowerIn' : 'equalPowerOut');
+    if (next) scheduleEntries(t);
   }
 
   /** Loads a gate period rendered at `hz` with `params` and blends over to it (0.6 s). */
@@ -266,6 +288,7 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
     carrier.offset.setValueAtTime(value, t);
     retargetTrims(value, t);
     state.carrierHz = value;
+    applyVoicing(value, t, VOICING_CROSSFADE_SECONDS, { canon: state.canon });
     return value;
   }
 
@@ -303,10 +326,18 @@ export function createToneLayer(ctx, bus, cache, initial = {}) {
 
   return {
     setMode, setCarrier, setBeat, scheduleBeatGlide, setTimbre, setPad, setGate,
-    startAttune, commitAttune, cancelAttune, start, stop,
+    startAttune, commitAttune, cancelAttune, start, stop, applyVoicing, scheduleEntries,
     params: { carrierHz: carrier.offset, halfBeat: halfBeat.offset },
-    /** { mode, carrierHz, beatHz, timbre, pad, attuning }. */
-    getState: () => ({ mode: state.mode, carrierHz: state.carrierHz, beatHz: state.beatHz, timbre: state.timbre, pad: state.pad, attuning: state.attune !== null }),
+    /** The carrier ConstantSourceNode (its output is the carrier in Hz) and the node the pad sums into, for the canon voices. */
+    carrierNode: carrier,
+    padInput,
+    /** What the texture planner drives, and its nominal values: the pad bus level and the pad low-pass cutoff. */
+    textureParams: { padBus: vPad.gain, padFilter: lpPad.frequency },
+    textureNominal: () => ({ padBus: padGain, padFilterHz: state.lpHz }),
+    /** { mode, carrierHz, beatHz, timbre, pad, attuning, register }. */
+    getState: () => ({
+      mode: state.mode, carrierHz: state.carrierHz, beatHz: state.beatHz, timbre: state.timbre, pad: state.pad, attuning: state.attune !== null, register: state.register,
+    }),
   };
 }
 

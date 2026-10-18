@@ -13,9 +13,15 @@
   transition: opacity 300ms linear;
 }
 
-html[data-dim="night"] .cats {
+/* Night dim: 70 % after a minute, 30 % after five, each over 2 s; activity restores in 300 ms. */
+html[data-dim="night"] .cats,
+html[data-dim="deep"] .cats {
   opacity: 0.7;
-  transition-duration: 2s;
+  transition: opacity 2s var(--ease-breath, ease-in-out);
+}
+
+html[data-dim="deep"] .cats {
+  opacity: 0.3;
 }
 
 /* --- the cat button ---------------------------------------------------------------------------------------- */
@@ -88,7 +94,8 @@ html[data-dim="night"] .cats {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 0 1px rgb(255 255 255 / 0.35)); /* dark rim light */
+  /* dark rim light, up and to the right toward the moon */
+  filter: drop-shadow(1px -1px 0 rgb(255 255 255 / 0.3)) drop-shadow(0 0 1px rgb(255 255 255 / 0.16));
   transition: transform var(--t-press, 120ms) var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
@@ -96,16 +103,18 @@ html[data-dim="night"] .cats {
   transform: scale(0.97);
 }
 
-.cat[data-coat="black"] .cat__svg {
-  filter: drop-shadow(0 0 1.5px rgb(255 255 255 / 0.55)); /* a black cat on a dark sea needs a little more rim */
+/* a dark coat on a dark sea needs a little more rim */
+.cat[data-coat="black"] .cat__svg,
+.cat[data-coat="tuxedo"] .cat__svg {
+  filter: drop-shadow(1px -1px 0 rgb(255 255 255 / 0.5)) drop-shadow(0 0 1px rgb(255 255 255 / 0.22));
 }
 
 .cat__sclera {
   filter: drop-shadow(0 0 1.5px var(--eye)); /* eye glow in the dark */
 }
 
-html[data-theme="light"] .cat__svg {
-  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.22)); /* 1 px outline on light water */
+html[data-theme="light"] .cat .cat__svg {
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.22)); /* 1 px outline on light water, for every coat */
 }
 
 html[data-theme="light"] .cat__sclera {
@@ -123,6 +132,7 @@ html[data-theme="light"] .cat__sclera {
 .cat__svg--loaf .cat__head { transform-origin: 40px 60px; }
 .cat__svg--walk .cat__head { transform-origin: 96px 58px; }
 .cat__svg--sleep .cat__head { transform-origin: 84px 70px; }
+.cat__svg--peek .cat__head { transform-origin: 60px 92px; }
 
 .cat.is-tilting .cat__head {
   transform: rotate(-6deg);
@@ -303,7 +313,7 @@ html[data-motion="still"] .cat[data-frolic] .cat__svg {
 /* --- cell-shaded background cats: shown while a purr is audible (cats/toon.js) ------------------------------- */
 
 .toon {
-  --toon-opacity: 0.34;
+  --toon-opacity: 0.28;
   position: fixed;
   inset: 0;
   z-index: 0; /* after the canvas in the DOM: above the sea, below the visiting cats and every control */
@@ -314,8 +324,9 @@ html[data-motion="still"] .cat[data-frolic] .cat__svg {
 }
 
 .toon.is-active { opacity: var(--toon-opacity); }
-html[data-theme="light"] .toon { --toon-opacity: 0.42; }
+html[data-theme="light"] .toon { --toon-opacity: 0.36; }
 html[data-dim="night"] .toon.is-active { opacity: calc(var(--toon-opacity) * 0.6); }
+html[data-dim="deep"] .toon.is-active { opacity: calc(var(--toon-opacity) * 0.4); }
 html[data-scene="off"] .toon { display: none; }
 
 .toon__cat {
@@ -339,6 +350,7 @@ html[data-scene="off"] .toon { display: none; }
 .toon.is-active .toon__body { animation: toon-breathe var(--t-cat-breath, 10s) var(--ease-breath, ease-in-out) infinite; }
 .toon.is-active .toon__cat--right { animation: toon-drift 22s var(--ease-breath, ease-in-out) infinite alternate; }
 .toon.is-active .toon__cat--right .toon__head { animation-delay: -3.5s; }
+.toon[data-mood="night"] .toon__tail { animation-duration: 6.4s; } /* a slower swish at bedtime (toon.setMood) */
 
 html[data-motion="still"] .toon.is-active .toon__part,
 html[data-motion="still"] .toon.is-active .toon__cat { animation: none; }

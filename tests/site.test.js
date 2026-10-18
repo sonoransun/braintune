@@ -248,6 +248,17 @@ describe('index.html', () => {
   test('has a <noscript> message', () => {
     assert.match(html(), /<noscript>\s*\S[\s\S]*?<\/noscript>/i, 'index.html: <noscript> message missing');
   });
+
+  test('carries the settings, fine tuning, About and first-run copy word for word from STRINGS', async () => {
+    const { STRINGS } = await import(pathToFileURL(join(DOCS, 'js/core/microcopy.js')).href);
+    const text = html().replace(/<[^>]+>/g, '\n').replace(/&amp;/g, '&');
+    const walk = (value, path) => (typeof value === 'string' ? [[path, value]] : Object.entries(value).flatMap(([key, inner]) => walk(inner, `${path}.${key}`)));
+    // Written at runtime instead (platform, attune and slider readouts).
+    const runtimeOnly = /^(settings\.keepAwake\.unavailable|settings\.addToHome\.apple|fineTuning\.attune\.(hint|done)|fineTuning\.(rainfall|sea)Levels\.)/;
+    const copy = [...['settings', 'fineTuning', 'about', 'firstRun'].flatMap((group) => walk(STRINGS[group], group)), ['mixer.purrNote', STRINGS.mixer.purrNote], ['player.restartSound', STRINGS.player.restartSound]];
+    const missing = copy.filter(([path, value]) => !runtimeOnly.test(path) && !text.includes(value)).map(([path, value]) => `${path}: ${value}`);
+    assert.deepEqual(missing, [], `index.html lacks STRINGS copy:\n${missing.join('\n')}`);
+  });
 });
 
 // --- CSS motion contract helpers ---------------------------------------------------------------------------------
@@ -433,10 +444,11 @@ describe('size budgets', () => {
       .map(([rel, size]) => `${rel} (${size} B)`)
       .join(', ');
 
-  test('docs/ without icons stays under 450 KB', () => {
+  // Precached once by the service worker; still a small page.
+  test('docs/ without icons stays under 512 KB', () => {
     const files = docsFiles().filter((rel) => !rel.startsWith('icons/'));
     const bytes = total(files);
-    assert.ok(bytes < 450 * KB, `docs/ minus icons is ${bytes} bytes (budget ${450 * KB}); largest: ${largest(files)}`);
+    assert.ok(bytes < 512 * KB, `docs/ minus icons is ${bytes} bytes (budget ${512 * KB}); largest: ${largest(files)}`);
   });
 
   test('no text file exceeds 48 KB', () => {

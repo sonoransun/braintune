@@ -1,5 +1,6 @@
-// Cell-shaded background cats (v2): flat base fills, one hard-edged ink shadow band, a rim light and thick ink
-// outlines. Each moving part is its own group with its own clip so it can rotate without its shading sliding off.
+// Cell-shaded background cats (v2, v0.4 §V11): flat base fills, a hard-edged ink shadow band with a darker core, a
+// rim light tinted by the sea's foam and ink outlines. Each moving part is its own group with its own clip so it can
+// rotate without its shading sliding off.
 // Pure: returns SVG strings with presentation attributes only (no style attributes; CSP style-src 'self').
 import { COATS } from './cat-art.js';
 
@@ -7,9 +8,12 @@ import { COATS } from './cat-art.js';
 export const TOON_VARIANTS = Object.freeze(['play', 'sit', 'lie']);
 
 const INK = '#1B1626';
-const OUTLINE = 4;
-const SHADE_OPACITY = 0.28;
-const RIM_OPACITY = 0.24;
+const OUTLINE = 3.5;
+const SHADE_OPACITY = 0.2;
+const CORE_OPACITY = 0.12; // a second, smaller band inside the shadow: two cel steps
+const CORE_SCALE = 0.7;
+const RIM = 'var(--foam, #FFFFFF)';
+const RIM_OPACITY = 0.3;
 const BLUSH = '#FF9FB2';
 const YARN = '#E86A8E';
 
@@ -49,14 +53,18 @@ function faceAt(cx, cy, k) {
   ];
 }
 
-/** Stripes or patches on a part, per coat: tabby and grey get stripes, calico gets two patches, black nothing. */
-function coatDeco(coat, stripes, patches) {
+/** Coat details on a part: tabby and grey get stripes, calico two patches, tuxedo its whites, black nothing. */
+function coatDeco(coat, stripes, patches, whites = []) {
   if (coat === 'calico') return patches;
   if (coat === 'orangeTabby' || coat === 'grey') return stripes;
+  if (coat === 'tuxedo') return whites;
   return [];
 }
 
 const stripe = (d) => ({ tag: 'path', d, stroke: 'markings', 'stroke-width': 6, fill: 'none', 'stroke-linecap': 'round' });
+const white = (cx, cy, rx, ry) => ({ tag: 'ellipse', cx, cy, rx, ry, fill: 'markings' });
+/** A tuxedo muzzle under the nose of a head of radius r centred at (cx, cy). */
+const muzzle = (cx, cy, r) => white(cx, cy + 0.28 * r, 0.4 * r, 0.26 * r);
 
 function sitGroups(coat, dx = 0, { batting = false } = {}) {
   const groups = [
@@ -79,6 +87,7 @@ function sitGroups(coat, dx = 0, { batting = false } = {}) {
         coat,
         [stripe(shift('M58 136 q12 6 22 0 M56 158 q12 6 22 0 M122 136 q12 6 22 0 M124 158 q12 6 22 0', dx))],
         [{ tag: 'ellipse', cx: 76 + dx, cy: 132, rx: 22, ry: 18, fill: 'markings' }, { tag: 'ellipse', cx: 128 + dx, cy: 170, rx: 18, ry: 22, fill: 'patch' }],
+        [white(100 + dx, 143, 23, 24)],
       ),
       shade: { cx: 156 + dx, cy: 182, rx: 62, ry: 78 },
       rim: { cx: 72 + dx, cy: 112, rx: 14, ry: 22 },
@@ -95,7 +104,10 @@ function sitGroups(coat, dx = 0, { batting = false } = {}) {
   }
   groups.push({
     ...HEAD(dx),
-    deco: [...HEAD(dx).deco, ...coatDeco(coat, [stripe(shift('M90 44 l2 12 M100 40 l0 14 M110 44 l-2 12', dx))], [{ tag: 'ellipse', cx: 120 + dx, cy: 62, rx: 16, ry: 14, fill: 'patch' }])],
+    deco: [
+      ...HEAD(dx).deco,
+      ...coatDeco(coat, [stripe(shift('M90 44 l2 12 M100 40 l0 14 M110 44 l-2 12', dx))], [{ tag: 'ellipse', cx: 120 + dx, cy: 62, rx: 16, ry: 14, fill: 'patch' }], [muzzle(100 + dx, 78, 42)]),
+    ],
   });
   return groups;
 }
@@ -150,6 +162,7 @@ const VARIANTS = {
           coat,
           [stripe('M120 88 q4 12 0 22 M146 84 q4 12 0 24 M172 86 q4 12 0 22')],
           [{ tag: 'ellipse', cx: 128, cy: 104, rx: 26, ry: 16, fill: 'markings' }, { tag: 'ellipse', cx: 190, cy: 118, rx: 20, ry: 14, fill: 'patch' }],
+          [white(96, 126, 20, 16)],
         ),
         shade: { cx: 176, cy: 160, rx: 112, ry: 36 },
         rim: { cx: 112, cy: 88, rx: 26, ry: 6 },
@@ -172,7 +185,7 @@ const VARIANTS = {
         deco: [
           { tag: 'polygon', points: '43,57 46,38 57,53', fill: 'ear' },
           { tag: 'polygon', points: '89,56 88,37 78,52', fill: 'ear' },
-          ...coatDeco(coat, [stripe('M58 58 l2 10 M68 56 l0 11 M78 58 l-2 10')], [{ tag: 'ellipse', cx: 82, cy: 70, rx: 13, ry: 11, fill: 'patch' }]),
+          ...coatDeco(coat, [stripe('M58 58 l2 10 M68 56 l0 11 M78 58 l-2 10')], [{ tag: 'ellipse', cx: 82, cy: 70, rx: 13, ry: 11, fill: 'patch' }], [muzzle(66, 86, 34)]),
         ],
         shade: { cx: 106, cy: 108, rx: 46, ry: 42 },
         rim: { cx: 48, cy: 66, rx: 12, ry: 7 },
@@ -201,16 +214,20 @@ function geometry(part) {
 
 /**
  * One part group, drawn the cel way: a thick ink underlay of the silhouette (only its outer half shows, so parts of
- * one group merge without inner lines), flat fills, then coat details, a hard shadow band and a rim light clipped to
- * the silhouette, and the face on top.
+ * one group merge without inner lines), flat fills, then coat details, a hard shadow band with a darker core (0.7× its
+ * radii) and a rim light clipped to the silhouette, and the face on top.
  */
 function renderGroup(group, colours, id) {
   const clipId = `${id}-${group.cls.replace('toon__', '')}`;
   const base = group.fill ?? colours.coat;
   const each = (extra) => group.parts.map((part) => `<${part.tag} ${attrs(geometry(part), colours)}${extra}/>`).join('');
   const deco = (group.deco ?? []).map((part) => `<${part.tag} ${attrs(part, colours)}/>`).join('');
-  const shade = `<ellipse ${attrs(group.shade, colours)} fill="${INK}" fill-opacity="${SHADE_OPACITY}"/>`;
-  const rim = group.rim ? `<ellipse ${attrs(group.rim, colours)} fill="#FFFFFF" fill-opacity="${RIM_OPACITY}"/>` : '';
+  const { cx, cy, rx, ry } = group.shade;
+  const core = { cx, cy, rx: rx * CORE_SCALE, ry: ry * CORE_SCALE };
+  const shade =
+    `<ellipse ${attrs(group.shade, colours)} fill="${INK}" fill-opacity="${SHADE_OPACITY}"/>` +
+    `<ellipse ${attrs(core, colours)} fill="${INK}" fill-opacity="${CORE_OPACITY}"/>`;
+  const rim = group.rim ? `<ellipse ${attrs(group.rim, colours)} fill="${RIM}" fill-opacity="${RIM_OPACITY}"/>` : '';
   const face = (group.face ?? []).map((part) => `<${part.tag} ${attrs(part, colours)}/>`).join('');
   const [ox, oy] = group.origin;
   return (

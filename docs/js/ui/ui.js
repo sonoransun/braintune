@@ -1,11 +1,14 @@
-// mountUI (plan §5, §7): every control ↔ store, engine events → orb / status / mini / title / live regions, and the
-// session flows (first Play inside the click, timer, attune, resume offer, blocked / interrupted overlay).
+// mountUI (plan §5, §7; v0.4 spec §5): every control ↔ store, engine events → orb / status / mini / title / live
+// regions, and the session flows (first Play inside the click, the left/right check before a first headphones
+// session, timer, attune, Play on open with its caption and first-gesture start, the resume offer, the blocked /
+// interrupted veil, toasts held back at night).
 
 import { STRINGS, fill, statusLine, formatHz, formatPitch, formatPercent, formatMinutes, formatRainfall, formatSea, limitationsCopy } from '../core/microcopy.js';
-import { PRESETS, getPreset, resolvePreset, TIMER_OPTIONS, DEFAULT_PRESET_ID } from '../core/presets.js';
+import { PRESETS, getPreset, resolvePreset, canonFor, suggestPreset, TIMER_OPTIONS, DEFAULT_PRESET_ID } from '../core/presets.js';
 import { bandOf, recommendMode, recommendCarrier } from '../core/entrainment.js';
 import { gateParams } from '../core/gate.js';
-import { parse } from '../core/state.js';
+import { parse, startPlan } from '../core/state.js';
+import { shouldDeferToast } from '../core/toast-queue.js';
 import { POSES, COATS, catSvg, coatVars, catLabel } from '../core/cat-art.js';
 import { createOrb } from './orb.js';
 import { createToaster } from './toast.js';
@@ -23,6 +26,16 @@ const THEMES = ['dark', 'light', 'auto'];
 const PRESET_ICONS = { sleep: 'i-moon', deep: 'i-deep', rest: 'i-cloud', meditate: 'i-circle', catnap: 'i-paw', calm: 'i-wave', focus: 'i-target', energise: 'i-bolt', clarity: 'i-sparkle' };
 const FIVE_MIN = 5 * 60000;
 const ONE_MIN = 60000;
+/** Seconds a preset change glides over; the engine starts a preset's beat glide after it. */
+const APPLY_GLIDE_S = 2;
+/** The Restart sound link fades in once sound has played this long. */
+const RESTART_REVEAL_MS = 20000;
+/** The left/right check: each tone lasts 1.5 s and the right one starts 2 s after the left. */
+const STEREO_TOAST_MS = 1500;
+const STEREO_RIGHT_AT_MS = 2000;
+/** Controls whose tap is itself the start of a waiting session, and the switch that turns Play on open off instead. */
+const START_BUTTONS = '#orb, #mini-toggle';
+const AUTOPLAY_SWITCH = '#autoplay';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const pct = (x01) => Math.round(x01 * 100);
@@ -38,15 +51,17 @@ const activePreset = (s) => getPreset(s.presetId) ?? getPreset(DEFAULT_PRESET_ID
 const presetName = (s) => (s.custom ? STRINGS.presets.custom : activePreset(s).name);
 const beatOf = (s) => s.custom?.beatHz ?? activePreset(s).beatHz;
 
-/** Engine parameters for the current settings: the preset resolved for the listening setup, with custom fine tuning on top. */
+/** Engine parameters for the current settings: the preset resolved for the listening setup and pad style, with custom fine tuning on top. */
 function resolveSettings(s, platform) {
   const device = platform?.coarse ? 'phone' : 'desktop';
-  const base = resolvePreset(activePreset(s), { listening: s.listening, device, override: s.custom?.mode ?? 'auto' });
+  const preset = activePreset(s);
+  const base = resolvePreset(preset, { listening: s.listening, device, override: s.custom?.mode ?? 'auto', padStyle: s.padStyle });
   if (!s.custom) return base;
   const { beatHz, carrierHz, timbre, pad, mode: override } = s.custom;
   const mode = recommendMode({ listening: s.listening, beatHz, override });
   const carrier = recommendCarrier({ presetCarrierHz: carrierHz, mode, device, listening: s.listening });
-  return { ...base, mode, beatHz, carrierHz: carrier, gate: gateParams(beatHz), timbre, pad, glide: null };
+  const canon = pad && canonFor(s.padStyle, preset);
+  return { ...base, mode, beatHz, carrierHz: carrier, gate: gateParams(beatHz, { gentle: base.gentle }), timbre, pad, canon, glide: null };
 }
 
 /** Timer minutes for the active preset: the per-preset override when set (0 = none), else the preset default. */
@@ -55,9 +70,9 @@ function timerMinutesFor(s) {
   return override === undefined || override === null ? activePreset(s).timerMinutes : override;
 }
 
-/** Mounts the UI over the sheet and announcer app.js created; returns { destroy, onPet, setStill, firstSoundMs, toaster }. */
+/** Mounts the UI over the sheet and announcer app.js created; returns { destroy, onPet, setStill, firstSoundMs, notify }. */
 export function mountUI(root, options) {
-  const { store, engine = null, scene = null, cats = null, platform = {}, lifecycle = {}, sheet, announcer, version = '', resetSite = null } = options;
+  const { store, engine = null, scene = null, cats = null, platform = {}, lifecycle = {}, sheet, announcer, version = '', resetSite = null, onDim = null } = options;
   const now = options.now ?? (() => Date.now());
   const setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = options.clearTimer ?? ((id) => clearTimeout(id));
@@ -73,25 +88,34 @@ export function mountUI(root, options) {
 
   // --- shared services --------------------------------------------------------------------------------------
   let lastInputKeyboard = false;
-  listen(doc, 'keydown', () => { lastInputKeyboard = true; }, true);
-  listen(doc, 'pointerdown', () => { lastInputKeyboard = false; }, true);
+  const deferredToasts = []; // sticky toasts held for the next touch or key press (shouldDeferToast)
+  listen(doc, 'keydown', () => {
+    lastInputKeyboard = true;
+    flushDeferred();
+  }, true);
+  listen(doc, 'pointerdown', () => {
+    lastInputKeyboard = false;
+    flushDeferred();
+  }, true);
   const toaster = createToaster($('toasts'), { now, setTimer, clearTimer, keyboardIntent: () => lastInputKeyboard });
   const buzz = (kind) => haptic(kind, { enabled: store.get().haptics, nav: win.navigator });
   /** Shows a toast, replacing any visible toast with the same id (a newer timer or listening message wins). */
   const toast = (id, text, extra = {}) => {
     toaster.dismiss(id);
-    return toaster.show({ id, text, ...extra });
+    return notify({ id, text, ...extra });
   };
 
   if (new URLSearchParams(win.location.search).get('gallery') === 'cats') {
     renderGallery(doc, $('panel-inner'));
-    return { destroy() {}, onPet() {}, setStill() {}, firstSoundMs: () => null, toaster };
+    return { destroy() {}, onPet() {}, setStill() {}, firstSoundMs: () => null, notify: (toastOptions) => toaster.show(toastOptions) };
   }
 
   // --- session state ----------------------------------------------------------------------------------------
   const returningVisitor = store.get().firstRunDone;
   let engineState = engine ? 'idle' : 'unavailable';
   let autoPending = false; // Play on open is waiting for the first tap or key press
+  let beginning = false; // a begin() is between its gesture and engine.play()
+  let startedByTap = null; // the click that started a waiting session on the orb or mini button (it must not also toggle)
   let remainingMs = null;
   let timerTotalMs = 0;
   let lastRemaining = Infinity;
@@ -101,9 +125,27 @@ export function mountUI(root, options) {
   let firstSoundMs = null;
   let mutedBeforeAll = null;
   let installPrompt = null;
+  let glideEndsAt = null; // when the beat glide the engine is running reaches the preset's beat (wall clock, ms)
+  let glideTimer = null;
+  let restartTimer = null;
 
   const isSounding = () => SOUNDING.has(engineState);
   const timerOptions = (s, resolved) => ({ endFadeSeconds: resolved.endFadeSeconds, chime: resolved.chime, after: s.timer.after });
+
+  /** Shows a toast now, or holds a sticky one back during a sleepy session or the night dim until the next touch or key press. */
+  function notify(toastOptions) {
+    const mood = isSounding() ? activePreset(store.get()).mood : null;
+    const dimmed = html.dataset.dim === 'night' || html.dataset.dim === 'deep';
+    if (shouldDeferToast({ sticky: toastOptions.sticky, mood, dimmed })) {
+      deferredToasts.push(toastOptions);
+      return false;
+    }
+    return toaster.show(toastOptions);
+  }
+
+  function flushDeferred() {
+    for (const toastOptions of deferredToasts.splice(0)) toaster.show(toastOptions);
+  }
 
   // --- elements ---------------------------------------------------------------------------------------------
   const statusEl = $('status');
@@ -131,17 +173,47 @@ export function mountUI(root, options) {
   // --- orb, status, title -----------------------------------------------------------------------------------
   const orb = createOrb($('orb'), { onToggle: onOrbToggle, still: html.dataset.motion === 'still' });
 
+  /** The preset's beat glide while the engine runs it: { fromHz, toHz, active }, else null (fine tuning has none). */
+  function glideNow(s) {
+    const glide = s.custom ? null : activePreset(s).glide;
+    if (!glide || glideEndsAt === null || !isSounding()) return null;
+    return { fromHz: glide.fromHz, toHz: activePreset(s).beatHz, active: now() < glideEndsAt };
+  }
+
+  /** The engine (re)starts a preset's beat glide on every session start and preset re-apply, after delayS. */
+  function trackGlide(delayS) {
+    const s = store.get();
+    const glide = s.custom ? null : activePreset(s).glide;
+    if (glideTimer !== null) clearTimer(glideTimer);
+    glideTimer = null;
+    glideEndsAt = glide ? now() + (delayS + glide.minutes * 60) * 1000 : null;
+    if (glide) {
+      glideTimer = setTimer(() => {
+        glideTimer = null;
+        render();
+      }, glideEndsAt - now());
+    }
+  }
+
   function currentLine(mark = null) {
     const s = store.get();
     return statusLine(engineState, {
       presetName: presetName(s), beatHz: beatOf(s), band: settingsBand(s), listening: s.listening,
-      remainingMs, returning: returningVisitor, mark,
+      remainingMs, returning: returningVisitor, mark, glide: glideNow(s),
     });
   }
 
   function titleFor(s) {
     if (isSounding()) return fill(STRINGS.titles.playing, { preset: presetName(s), beat: formatHz(beatOf(s)) });
     return PAUSED.has(engineState) ? STRINGS.titles.paused : STRINGS.titles.idle;
+  }
+
+  /** The caption under the status while Play on open waits: begin the preset, or continue a stored session. */
+  function waitingCaption(s) {
+    const plan = startPlan(s, now());
+    const name = (getPreset(plan.presetId) ?? activePreset(s)).name;
+    if (plan.kind === 'resume') return fill(STRINGS.player.autoplayContinue, { preset: name, time: minutesLeft(plan.remainingMs) });
+    return fill(STRINGS.player.autoplayOverlay, { preset: name });
   }
 
   function render() {
@@ -158,24 +230,28 @@ export function mountUI(root, options) {
     orb.setLabels({ label, attune: attuning });
     orb.setState(engineState);
     orb.setProgress(timerTotalMs > 0 && remainingMs !== null ? 1 - remainingMs / timerTotalMs : 0);
+    orb.setTimerArmed(timerTotalMs > 0);
+    orb.setWaiting(autoPending);
     miniToggle.setAttribute('aria-label', line.label);
     miniToggle.dataset.playing = String(isSounding());
     doc.title = titleFor(s);
-    hintEl.hidden = !(s.hints.orb && engineState === 'idle');
+    hintEl.hidden = !(autoPending || (s.hints.orb && engineState === 'idle'));
+    hintEl.classList.toggle('hint--waiting', autoPending);
+    hintEl.textContent = autoPending ? waitingCaption(s) : STRINGS.hints.orb;
     sheetHintEl.hidden = !s.hints.sheet;
     restartEl.hidden = !isSounding();
-    overlayEl.hidden = !(autoPending || engineState === 'blocked' || engineState === 'interrupted');
-    overlayText.textContent = autoPending
-      ? fill(STRINGS.player.autoplayOverlay, { preset: activePreset(s).name })
-      : engineState === 'interrupted' ? STRINGS.player.interruptedOverlay : STRINGS.player.blockedOverlay;
+    overlayEl.hidden = !(engineState === 'blocked' || engineState === 'interrupted');
+    overlayText.textContent = engineState === 'interrupted' ? STRINGS.player.interruptedOverlay : STRINGS.player.blockedOverlay;
     attuneButton.disabled = !isSounding() || attuning;
     attuneCancel.hidden = !attuning;
   }
 
   function setEngineState(state) {
     const previous = engineState;
+    const wasSounding = isSounding();
     engineState = state;
     if ((state === 'starting' || state === 'playing') && firstSoundMs === null && playClickAt !== null) firstSoundMs = win.performance.now() - playClickAt;
+    if (state === 'starting') trackGlide(0);
     if (state === 'ended') {
       orb.bloom();
       clearTimerState();
@@ -183,11 +259,27 @@ export function mountUI(root, options) {
     if (state === 'idle' || state === 'ended') store.set('session', null);
     if (PAUSED.has(state) && remainingMs !== null) store.set('session', { presetId: store.get().presetId, endsAt: null, pausedRemainingMs: remainingMs });
     if (attuning && !isSounding()) attuning = false;
+    if (wasSounding !== isSounding()) {
+      revealRestartLater();
+      if (!isSounding()) flushDeferred();
+    }
     syncKeepAwake();
     nightDim.refresh();
     render();
     const line = currentLine();
     if (line.announce && previous !== state) announcer.announce(line.announce);
+  }
+
+  /** Restart sound waits under the status until sound has played for 20 s; [hidden] stays the outer gate. */
+  function revealRestartLater() {
+    if (restartTimer !== null) clearTimer(restartTimer);
+    restartTimer = null;
+    restartEl.dataset.ready = 'false';
+    if (!isSounding()) return;
+    restartTimer = setTimer(() => {
+      restartTimer = null;
+      restartEl.dataset.ready = 'true';
+    }, RESTART_REVEAL_MS);
   }
 
   function clearTimerState() {
@@ -210,24 +302,43 @@ export function mountUI(root, options) {
   }
 
   // --- play / pause / timer ---------------------------------------------------------------------------------
-  /** First Play: unlock() synchronously inside the gesture, then play the resolved preset and arm its timer. */
+  /**
+   * First Play: unlock() synchronously inside the gesture; a first headphones session plays the left/right check
+   * before it enters; then the preset plays, resolved from the store only now (so a chip tapped with the start
+   * counts), and its timer is armed.
+   */
   function begin({ resumeMs = null } = {}) {
-    if (!engine) return;
+    if (!engine || beginning) return;
+    beginning = true;
     playClickAt = win.performance.now();
     buzz('play');
     toaster.dismiss('resume');
-    const unlocking = engine.unlock();
-    Promise.resolve(unlocking).then((result) => {
-      if (result !== 'running') return;
-      const s = store.get();
-      const resolved = resolveSettings(s, platform);
-      engine.play({ preset: resolved });
-      if (s.hints.orb) store.set('hints.orb', false);
-      const ms = resumeMs ?? timerMinutesFor(s) * 60000;
-      if (ms > 0) armTimer(ms, s, resolved);
-      else clearTimerState();
-      stereoIntro(s);
-    });
+    Promise.resolve(engine.unlock())
+      .then((result) => {
+        if (result !== 'running') return false;
+        const s = store.get();
+        return s.listening === 'headphones' && !s.hints.stereoCheckDone ? runStereoCheck().then(() => true) : true;
+      })
+      .then((go) => {
+        beginning = false;
+        if (go) playNow(resumeMs);
+      }, () => {
+        beginning = false;
+      });
+  }
+
+  function playNow(resumeMs) {
+    const s = store.get();
+    const resolved = resolveSettings(s, platform);
+    engine.play({ preset: resolved });
+    if (s.hints.orb) store.set('hints.orb', false);
+    const ms = resumeMs ?? timerMinutesFor(s) * 60000;
+    if (ms > 0) {
+      armTimer(ms, s, resolved);
+      return;
+    }
+    clearTimerState();
+    store.set('session', null); // nothing left to resume from an untimed session
   }
 
   function armTimer(ms, s = store.get(), resolved = resolveSettings(s, platform)) {
@@ -239,24 +350,23 @@ export function mountUI(root, options) {
     render();
   }
 
-  /** Headphones chosen on first run: one left/right check the first time sound plays. */
-  function stereoIntro(s) {
-    if (s.listening !== 'headphones' || s.hints.stereoCheckDone) return;
-    runStereoCheck();
-  }
-
+  /** The left/right check: "Left…" as the left tone starts, "Right…" 2 s later; resolves once it has played (3.5 s). */
   function runStereoCheck() {
-    if (!engine) return;
+    if (!engine) return Promise.resolve(false);
     store.set('hints.stereoCheckDone', true);
-    Promise.resolve(engine.unlock()).then((result) => {
-      if (result !== 'running') return;
-      toast('stereo-left', STRINGS.toasts.stereoLeft, { durationMs: 1000 });
-      setTimer(() => toast('stereo-right', STRINGS.toasts.stereoRight, { durationMs: 1000 }), 1000);
+    return Promise.resolve(engine.unlock()).then((result) => {
+      if (result !== 'running') return false;
+      toast('stereo-left', STRINGS.toasts.stereoLeft, { durationMs: STEREO_TOAST_MS });
+      setTimer(() => toast('stereo-right', STRINGS.toasts.stereoRight, { durationMs: STEREO_TOAST_MS }), STEREO_RIGHT_AT_MS);
       return engine.stereoCheck();
-    }).catch(() => {});
+    }).catch(() => false);
   }
 
-  function onOrbToggle() {
+  function onOrbToggle(event) {
+    if (event && event === startedByTap) {
+      startedByTap = null; // this tap already started the waiting session
+      return;
+    }
     if (attuning) {
       finishAttune();
       return;
@@ -391,6 +501,7 @@ export function mountUI(root, options) {
   const sea = bindSlider($('sea'), { output: $('sea-out'), format: (v) => formatSea(v / 100), shiftStep: 20, setTimer, clearTimer, onInput: (v) => engine?.setOceanIntensity(v / 100), onCommit: (v) => store.set('oceanIntensity', v / 100) });
   const timbre = bindRadioGroup($('timbre'), { onChange: (v) => { buzz('tap'); engine?.setTimbre(v); updateCustom({ timbre: v }); } });
   const pad = bindSwitch($('pad'), { onChange: (on) => { buzz('toggle'); engine?.setPad(on); updateCustom({ pad: on }); } });
+  const padStyle = bindRadioGroup($('pad-style'), { onChange: (v) => { buzz('tap'); store.set('padStyle', v); } });
   const style = bindRadioGroup($('style'), {
     onChange: (v) => {
       buzz('tap');
@@ -402,11 +513,12 @@ export function mountUI(root, options) {
   listen(attuneCancel, 'click', cancelAttune);
   bindDisclosure($('fine-toggle'), $('fine-panel'));
   bindDisclosure($('explainer-toggle'), $('explainer-panel'));
+  bindDisclosure($('more-toggle'), $('more-panel'));
   const aboutDisclosure = bindDisclosure($('about-toggle'), $('about-panel'));
 
   const listening = bindRadioGroup($('listening'), { onChange: setListening });
   listen($('mode'), 'click', () => setListening(store.get().listening === 'speakers' ? 'headphones' : 'speakers'));
-  listen($('stereo-check'), 'click', runStereoCheck);
+  listen($('stereo-check'), 'click', () => runStereoCheck());
   const catsSwitch = bindSwitch($('cats-switch'), { onChange: (on) => { buzz('toggle'); store.set('cats.enabled', on); } });
   const autoplaySwitch = bindSwitch($('autoplay'), { onChange: (on) => { buzz('toggle'); store.set('autoplay', on); } });
   const keepAwake = bindSwitch($('keep-awake'), { onChange: (on) => { buzz('toggle'); store.set('keepAwake', on); } });
@@ -418,7 +530,7 @@ export function mountUI(root, options) {
   const nightDimSwitch = bindSwitch($('night-dim'), { onChange: (on) => { buzz('toggle'); store.set('nightDim', on); } });
   const shortcuts = bindSwitch($('shortcuts'), { onChange: (on) => { buzz('toggle'); store.set('shortcuts', on); } });
   listen($('restart-sound'), 'click', () => engine?.rebuild());
-  listen($('overlay-button'), 'click', () => startPending() || (engineState === 'interrupted' ? continueAfterInterruption() : begin()));
+  listen($('overlay-button'), 'click', () => (engineState === 'interrupted' ? continueAfterInterruption() : begin()));
   listen(miniToggle, 'click', onOrbToggle);
   listen($('reset'), 'click', resetAll);
   listen(installButton, 'click', () => {
@@ -444,11 +556,13 @@ export function mountUI(root, options) {
   }
 
   // --- settings visibility and store → controls -------------------------------------------------------------
+  const limits = platformLimits(lifecycle, platform);
   $('keep-awake-row').hidden = !platform.hasWakeLock;
   $('haptics-row').hidden = !platform.hasVibrate;
   $('version').textContent = version;
   $('storage-note').hidden = store.persisted !== false;
-  $('platform-notes').replaceChildren(...platformNotes(lifecycle, platform).map((text) => Object.assign(doc.createElement('li'), { textContent: text })));
+  $('platform-notes').replaceChildren(...limits.lines.map((text) => Object.assign(doc.createElement('li'), { textContent: text })));
+  $('install-generic').textContent = limits.platform === 'apple' ? STRINGS.settings.addToHome.apple : STRINGS.settings.addToHome.generic;
 
   function syncPresetControls(s) {
     presetChips.set(s.custom ? '' : s.presetId);
@@ -483,6 +597,7 @@ export function mountUI(root, options) {
     pitch.set(r.carrierHz);
     timbre.set(r.timbre);
     pad.set(r.pad);
+    padStyle.set(s.padStyle);
     style.set(s.custom?.mode ?? 'auto');
     gammaNote.hidden = r.beatHz < 30;
   }
@@ -521,7 +636,7 @@ export function mountUI(root, options) {
       mixSliders[layer].setDisabled(flag);
       $(`mute-${layer}`).disabled = flag;
     }
-    for (const group of [timerChips, afterRadios, timbre, style]) group.setDisabled(flag);
+    for (const group of [timerChips, afterRadios, timbre, padStyle, style]) group.setDisabled(flag);
     for (const control of [beat, pitch, pad, rainfall, sea]) control.setDisabled(flag);
     for (const button of [attuneButton, $('stereo-check'), miniToggle]) button.disabled = flag;
   }
@@ -537,15 +652,20 @@ export function mountUI(root, options) {
 
   disposers.push(store.subscribe((keys, s) => {
     const has = (key) => keys.includes(key);
-    if ((has('presetId') || has('listening')) && isSounding()) {
+    const backToPreset = has('custom') && !s.custom;
+    // A new preset, listening setup or pad style re-resolves the sound; so does leaving fine tuning for the preset.
+    if ((has('presetId') || has('listening') || backToPreset) && isSounding()) {
       const resolved = resolveSettings(s, platform);
-      engine.applyPreset(resolved, { glideSeconds: 2 });
-      if (has('presetId')) {
-        toast('shift', fill(STRINGS.toasts.presetShift, { preset: presetName(s) }));
-        retimeForPreset(s, resolved);
-      }
+      engine.applyPreset(resolved, { glideSeconds: APPLY_GLIDE_S });
+      trackGlide(APPLY_GLIDE_S);
+      if (has('presetId') || backToPreset) toast('shift', fill(STRINGS.toasts.presetShift, { preset: presetName(s) }));
+      if (has('presetId')) retimeForPreset(s, resolved);
+    } else if (has('padStyle') && isSounding()) {
+      engine.setCanon(resolveSettings(s, platform).canon); // drone ⇄ canon without restarting the beat glide
     }
-    if (has('presetId') || has('custom')) {
+    if ((has('presetId') || has('custom')) && activePreset(s).mood !== 'sleepy') flushDeferred();
+    if (has('autoplay') && !s.autoplay) stopWaiting();
+    if (has('presetId') || has('custom') || has('padStyle')) {
       syncPresetControls(s);
       syncFineControls(s);
       syncTimerControls(s);
@@ -612,7 +732,9 @@ export function mountUI(root, options) {
 
   disposers.push(installShortcuts(doc, { isEnabled: () => store.get().shortcuts, dispatch }));
 
-  const nightDim = createNightDim({ root: html, isPlaying: isSounding, getPresetId: () => store.get().presetId, isEnabled: () => store.get().nightDim, now, setTimer, clearTimer });
+  const nightDim = createNightDim({
+    root: html, isPlaying: isSounding, getPresetId: () => store.get().presetId, isEnabled: () => store.get().nightDim, onChange: onDim, now, setTimer, clearTimer,
+  });
   nightDim.start();
   disposers.push(() => nightDim.stop());
 
@@ -629,24 +751,36 @@ export function mountUI(root, options) {
   });
 
   /**
-   * Play on open. Browsers start audio only after a user gesture unless their autoplay policy says otherwise, so:
-   * where the documented Autoplay Policy Detection API reports 'allowed', start at once; everywhere else show a
-   * full-screen "Tap anywhere to start Sleep" layer, and the first tap or key press starts the session (a real gesture).
+   * Play on open. Browsers start audio only after a user gesture unless their autoplay policy says otherwise, so
+   * where the documented Autoplay Policy Detection API reports 'allowed' the session starts at once; everywhere else
+   * the scene, the waiting orb and a caption under the status wait, and the first tap or key press anywhere starts
+   * it (a real gesture) while the tap still does what it was aimed at. A session stored with more than a minute
+   * left continues (core/state.js startPlan).
    */
   function autoStart() {
     if (!engine || engineState !== 'idle') return false;
     if (win.navigator?.getAutoplayPolicy?.('audiocontext') === 'allowed') {
-      begin();
+      startFromPlan();
       return true;
     }
     autoPending = true;
+    doc.addEventListener('click', startFromTap, { capture: true });
     doc.addEventListener('keydown', startFromKey, { capture: true });
     render();
     return true;
   }
 
+  const optsOut = (event) => Boolean(event.target?.closest?.(AUTOPLAY_SWITCH)); // turning Play on open off starts nothing
+
+  /** Capture phase: the tap starts the session and still reaches its target; on the orb or the mini button the start is that tap's whole action. */
+  function startFromTap(event) {
+    if (optsOut(event)) return;
+    if (event.target?.closest?.(START_BUTTONS)) startedByTap = event;
+    startPending();
+  }
+
   function startFromKey(event) {
-    if (event.key === 'Tab' || event.key === 'Escape' || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'Tab' || event.key === 'Escape' || event.metaKey || event.ctrlKey || event.altKey || optsOut(event)) return;
     event.preventDefault();
     event.stopPropagation();
     startPending();
@@ -655,35 +789,47 @@ export function mountUI(root, options) {
   /** The waiting autoplay starts from this gesture; returns false when nothing was waiting. */
   function startPending() {
     if (!autoPending) return false;
-    autoPending = false;
-    doc.removeEventListener('keydown', startFromKey, { capture: true });
-    begin();
-    render();
+    stopWaiting();
+    startFromPlan();
     return true;
+  }
+
+  function stopWaiting() {
+    if (!autoPending) return;
+    autoPending = false;
+    doc.removeEventListener('click', startFromTap, { capture: true });
+    doc.removeEventListener('keydown', startFromKey, { capture: true });
+    render();
+  }
+
+  /** Continues the stored session when more than a minute of it is left, on its preset; otherwise begins the current preset. */
+  function startFromPlan() {
+    const plan = startPlan(store.get(), now());
+    if (plan.kind !== 'resume') {
+      begin();
+      return;
+    }
+    if (plan.presetId !== store.get().presetId && getPreset(plan.presetId)) selectPreset(plan.presetId);
+    begin({ resumeMs: plan.remainingMs });
   }
 
   if (engine) {
     disposers.push(engine.on('state', ({ state }) => setEngineState(state)));
     disposers.push(engine.on('timer', onTimer));
+    disposers.push(engine.on('entrance', ({ endS }) => orb.setEntrance(endS * 1000)));
     disposers.push(engine.on('warning', ({ code, message }) => toast(`warning-${code}`, message)));
   }
 
+  /** Play on open off: a stored session with more than a minute left is offered in a toast; nothing plays until it is tapped. */
   function offerResume() {
-    const { session } = store.get();
-    if (!session || !engine) return;
-    const left = session.pausedRemainingMs ?? (session.endsAt ? session.endsAt - now() : 0);
-    if (!(left > ONE_MIN)) {
+    if (!store.get().session || !engine) return;
+    const plan = startPlan(store.get(), now());
+    if (plan.kind !== 'resume') {
       store.set('session', null);
       return;
     }
-    toast('resume', fill(STRINGS.player.resumePrompt, { time: minutesLeft(left) }), {
-      action: {
-        label: STRINGS.player.resume,
-        onAction: () => {
-          if (getPreset(session.presetId)) selectPreset(session.presetId);
-          begin({ resumeMs: left });
-        },
-      },
+    toast('resume', fill(STRINGS.player.resumePrompt, { time: minutesLeft(plan.remainingMs) }), {
+      action: { label: STRINGS.player.resume, onAction: startFromPlan },
       onDismiss: (reason) => {
         if (reason !== 'action') store.set('session', null);
       },
@@ -693,7 +839,8 @@ export function mountUI(root, options) {
   // --- start ------------------------------------------------------------------------------------------------
   syncAll(store.get());
   if (!engine) setControlsDisabled(true);
-  if (!firstRun.showIfNeeded(store) && !(store.get().autoplay && autoStart())) offerResume();
+  const firstRunOpened = firstRun.showIfNeeded(store, { suggested: suggestPreset(new Date(now()).getHours()) });
+  if (!firstRunOpened && !(store.get().autoplay && autoStart())) offerResume();
 
   return {
     /** Cats: milestone toasts at 1, 10, 25, 50 and 100 spotted. */
@@ -703,9 +850,12 @@ export function mountUI(root, options) {
     },
     setStill: (flag) => orb.setStill(flag),
     firstSoundMs: () => firstSoundMs,
-    toaster,
+    /** Toasts from outside the UI (offline ready, update ready); sticky ones wait at night (see notify above). */
+    notify,
     destroy() {
       for (const dispose of disposers.splice(0)) dispose();
+      stopWaiting();
+      for (const id of [glideTimer, restartTimer]) if (id !== null) clearTimer(id);
       orb.destroy();
       firstRun.destroy();
       toaster.destroy();
@@ -715,15 +865,15 @@ export function mountUI(root, options) {
 
 // --- rendering helpers ---------------------------------------------------------------------------------------
 
-/** About → platform notes from the lifecycle module when it answers for this platform, else the desktop copy. */
-function platformNotes(lifecycle, platform) {
+/** About → platform notes ({ platform, lines }) from the lifecycle module when it answers for this platform, else the desktop copy. */
+function platformLimits(lifecycle, platform) {
   try {
-    const lines = lifecycle.describeLimitations?.(platform)?.lines;
-    if (Array.isArray(lines) && lines.length > 0) return lines;
+    const limits = lifecycle.describeLimitations?.(platform);
+    if (Array.isArray(limits?.lines) && limits.lines.length > 0) return limits;
   } catch {
     // A lifecycle module that cannot describe this platform must not stop the UI from mounting.
   }
-  return limitationsCopy('desktop');
+  return { platform: 'desktop', lines: limitationsCopy('desktop') };
 }
 
 function svgIcon(doc, id) {
@@ -736,7 +886,7 @@ function svgIcon(doc, id) {
   return svg;
 }
 
-/** One chip per preset, in PRESETS order (shortcut digits 1–8 follow the same order). */
+/** One chip per preset, in PRESETS order (shortcut digits 1–9 follow the same order). */
 function renderPresetChips(doc, fieldset) {
   for (const preset of PRESETS) {
     const label = doc.createElement('label');

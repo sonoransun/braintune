@@ -10,7 +10,7 @@
   height: 100lvh;
   pointer-events: none;
   opacity: 1;
-  transition: opacity var(--t-slow, 300ms) var(--ease-out, ease-out);
+  transition: opacity 300ms var(--ease-out, ease-out);
 }
 
 /* Scene Off: the canvas is not drawn; the gradient below carries the band colours instead. */
@@ -40,8 +40,14 @@ body:has(canvas.scene:not([data-live]))::before {
   display: block;
 }
 
-/* Night dim (Sleep/Rest after a minute of stillness): the scene settles to 70 % over 2 s, restores in 300 ms. */
-html[data-dim="night"] .scene {
-  opacity: 0.7;
-  transition-duration: 2s;
+/* Night dim (Sleep, Deep sleep, Rest): stage night (a minute of stillness) settles the scene to 55 %, stage deep (five
+   minutes) to 35 % before the app stops drawing it; both over 2 s, and any activity restores it in 300 ms. */
+html[data-dim="night"] .scene,
+html[data-dim="deep"] .scene {
+  opacity: 0.55;
+  transition: opacity 2s var(--ease-breath, ease-in-out);
+}
+
+html[data-dim="deep"] .scene {
+  opacity: 0.35;
 }

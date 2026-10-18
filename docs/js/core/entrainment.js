@@ -1,6 +1,9 @@
 // Entrainment mathematics: bands, beat and carrier ranges, mode and carrier
-// recommendations, per-mode voice frequencies and the partial-beat table that
-// explains why beat voices are sines. Pure: no browser globals. Units: Hz.
+// recommendations, per-mode voice frequencies, the partial-beat table that
+// explains why beat voices are sines and the pad's second-order beat table.
+// Pure: no browser globals. Units: Hz.
+
+import { PAD_SLOTS } from './voicing.js';
 
 const range = (lo, hi) => Object.freeze([lo, hi]);
 
@@ -37,6 +40,8 @@ const ISOCHRONIC_ONLY_HZ = 30;
 /** A partial of a binaural pair is a plausible secondary beat only below these limits (see §6.2 of the plan). */
 const PERCEPTIBLE_PARTIAL_HZ = 1000;
 const PERCEPTIBLE_BEAT_HZ = 35;
+/** Largest denominator padBeatTable looks for when it writes a slot ratio as p/q. */
+const MAX_RATIO_DENOMINATOR = 16;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -82,6 +87,16 @@ export function partialBeatTable(f, beatHz, partials) {
     if (!(amp > 0)) return [];
     const perceptible = n * f < PERCEPTIBLE_PARTIAL_HZ && n * beatHz < PERCEPTIBLE_BEAT_HZ;
     return [{ n, left: n * left, right: n * right, interauralHz: n * beatHz, perceptible }];
+  });
+}
+
+/** Second-order beats the centred pad adds against voices at f ± beat/2 (Plomp 1967): per sounding slot of a voicing ({ gains }), its ratio as p/q in lowest terms, the component ratio·f and the beat p·beat/2 (sub beat/2, octave beat, fifth and twelfth 1.5 beat, double 2 beat); no slot sits at the carrier. */
+export function padBeatTable(f, beatHz, { gains }) {
+  return PAD_SLOTS.filter(({ name }) => gains[name] > 0).map(({ name, ratio }) => {
+    let q = 1;
+    while (q < MAX_RATIO_DENOMINATOR && !Number.isInteger(ratio * q)) q += 1;
+    const p = ratio * q;
+    return { name, ratio, p, q, componentHz: ratio * f, secondOrderHz: (p * beatHz) / 2, atCarrier: ratio === 1 };
   });
 }
 

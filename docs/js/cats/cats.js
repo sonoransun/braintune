@@ -12,6 +12,7 @@ export const CAT_SIZES = Object.freeze({
   loaf: Object.freeze({ w: 108, h: 90, foot: 0.895 }),
   walk: Object.freeze({ w: 114, h: 95, foot: 0.88 }),
   sleep: Object.freeze({ w: 108, h: 90, foot: 0.9 }),
+  peek: Object.freeze({ w: 96, h: 66, foot: 1 }), // head and paws only, resting on the ledge line
 });
 
 const ART_W = 120;
@@ -22,13 +23,14 @@ const TAP_SLOP_PX = 8;
 const PET_GAP_MS = 350; // one pet per 350 ms per cat keeps the one-shots under 3/s (§7.9)
 const BLINK_MS = 180;
 // Fidgets: one small one-shot action every few seconds keeps settled cats alive (look, flick, ear, stretch, groom),
-// and now and then a pounce to a new spot along the ledge. Sleepers only twitch an ear.
+// and now and then a pounce to a new spot along the ledge. Sleepers mostly twitch an ear; peekers look about.
 const FIDGET_EVERY_MS = [2800, 6500];
 const FIDGET_MS = { look: 1600, flick: 900, ear: 500, stretch: 1400, groom: 1800, pounce: 700 };
 const FIDGETS = {
   sit: { look: 3, flick: 3, ear: 2, stretch: 1, groom: 2, pounce: 2 },
   loaf: { look: 3, flick: 2, ear: 2, stretch: 1, pounce: 1 },
   sleep: { ear: 3, stretch: 1 },
+  peek: { look: 3, ear: 3 },
 };
 const STILL_FIDGETS = new Set(['ear']); // Still mode: no travel, no big movements
 const POUNCE_ARC_PX = 26;
@@ -212,6 +214,11 @@ export function createCats(layerEl, deps) {
 
   // --- placement ---------------------------------------------------------------------------------------------
 
+  /** Control rects a cat on the ledge could touch: one starting at or below the ledge line (the phone sheet's top bar) cannot. */
+  function avoidAbove(ledge) {
+    return getAvoidRects().filter((r) => r.y < ledge.y - 1);
+  }
+
   function occupiedRects(except) {
     return cats
       .filter((cat) => cat !== except && cat.pose !== 'walk')
@@ -226,7 +233,7 @@ export function createCats(layerEl, deps) {
       plan,
       viewport: getViewport(),
       ledge,
-      avoid: [...getAvoidRects(), ...occupiedRects(except)],
+      avoid: [...avoidAbove(ledge), ...occupiedRects(except)],
       size: { w: size.w, h: aboveLedge(size) },
       rng,
       margin: PLACE_MARGIN_PX,
@@ -325,7 +332,7 @@ export function createCats(layerEl, deps) {
     const reach = Math.sign(spot.x - cat.x) * Math.min(Math.abs(spot.x - cat.x), 180);
     const x1 = cat.x + reach;
     const target = { x: x1, y: spot.y, w: cat.size.w, h: aboveLedge(cat.size) };
-    if ([...getAvoidRects(), ...occupiedRects(cat)].some((r) => rectsIntersect(target, r, PLACE_MARGIN_PX))) return false;
+    if ([...avoidAbove(getLedge()), ...occupiedRects(cat)].some((r) => rectsIntersect(target, r, PLACE_MARGIN_PX))) return false;
     const from = `translate(${Math.round(cat.x)}px, ${Math.round(cat.y)}px)`;
     const mid = `translate(${Math.round(cat.x + reach / 2)}px, ${Math.round(cat.y - POUNCE_ARC_PX)}px)`;
     const to = `translate(${Math.round(x1)}px, ${Math.round(spot.y)}px)`;
@@ -387,7 +394,7 @@ export function createCats(layerEl, deps) {
   function relayout() {
     const ledge = getLedge();
     if (!ledge) return;
-    const avoid = getAvoidRects();
+    const avoid = avoidAbove(ledge);
     for (const cat of cats.filter((c) => !c.exiting)) {
       if (cat.pose === 'walk') {
         if (still()) exitCat(cat);
@@ -553,7 +560,7 @@ export function createCats(layerEl, deps) {
     const drawn = scheduler.plan(planContext(0));
     const plan = { ...drawn, pose: pose ?? drawn.pose, coat: coat ?? drawn.coat };
     if (plan.pose === 'walk') plan.speedPxPerS ??= (CAT_CONFIG.walkSpeedPxPerS[0] + CAT_CONFIG.walkSpeedPxPerS[1]) / 2;
-    else if (drawn.pose === 'walk') plan.dwellMs = Math.round(randRange(rng, ...CAT_CONFIG.dwellMs[plan.pose]));
+    else if (drawn.pose !== plan.pose) plan.dwellMs = Math.round(randRange(rng, ...CAT_CONFIG.dwellMs[plan.pose]));
     return plan;
   }
 

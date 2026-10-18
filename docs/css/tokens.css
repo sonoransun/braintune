@@ -27,6 +27,10 @@
   --accent-ink: #5FD4C8;
   --orb-core: #3FBFB2;
 
+  /* type: ui-rounded where the platform has it (Safari), the system UI face elsewhere; no web fonts */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: ui-rounded, var(--font-ui);
+
   /* motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
@@ -59,6 +63,8 @@ html[data-band="theta"] { --sky-top: #0E0820; --sky-mid: #24175A; --glow: #8A5CF
 html[data-band="alpha"] { --sky-top: #05161C; --sky-mid: #0E3844; --glow: #2E8F9E; --sea-far: #0F4552; --sea-near: #072029; --foam: #BFF3EC; --accent: #5FD4C8; --accent-ink: #5FD4C8; --orb-core: #3FBFB2; }
 html[data-band="beta"]  { --sky-top: #061222; --sky-mid: #0E2E52; --glow: #2F7FD0; --sea-far: #10396A; --sea-near: #071B33; --foam: #C9E8FF; --accent: #6CC1FF; --accent-ink: #6CC1FF; --orb-core: #4BA9F0; }
 html[data-band="gamma"] { --sky-top: #12091F; --sky-mid: #3D1F4D; --glow: #FF9F6E; --sea-far: #3A1F55; --sea-near: #170D2E; --foam: #FFE1C4; --accent: #FFC46B; --accent-ink: #FFC46B; --orb-core: #F2A65A; }
+/* gamma's peach glow needs a denser scrim under the status (palette.js SCRIM_BY_BAND); the light rule below wins by order */
+html[data-band="gamma"] { --scrim: rgb(10 14 32 / 0.66); }
 
 /* --- light theme -------------------------------------------------------------------------------------------- */
 html[data-theme="light"] {
@@ -99,6 +105,7 @@ html[data-layout="desktop"] { --orb: 280px; --panel-w: 380px; }
     --surface: rgb(10 14 32 / 0.96);
     --scrim: rgb(10 14 32 / 0.80);
   }
+  html[data-band="gamma"] { --scrim: rgb(10 14 32 / 0.80); }
   html[data-theme="light"] {
     --text-2: #2A3048;
     --border: rgb(20 26 46 / 0.40);
@@ -111,6 +118,7 @@ html[data-layout="desktop"] { --orb: 280px; --panel-w: 380px; }
 
 @media (prefers-reduced-transparency: reduce) {
   :root { --surface: rgb(10 14 32 / 0.98); --scrim: rgb(10 14 32 / 0.85); }
+  html[data-band="gamma"] { --scrim: rgb(10 14 32 / 0.85); }
   html[data-theme="light"] { --surface: rgb(255 255 255 / 0.98); --scrim: rgb(255 255 255 / 0.9); }
 }
 
@@ -131,4 +139,5 @@ html[data-layout="desktop"] { --orb: 280px; --panel-w: 380px; }
     --accent: Highlight;
     --accent-ink: LinkText;
   }
+  html[data-band="gamma"] { --scrim: Canvas; }
 }

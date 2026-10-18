@@ -4,19 +4,19 @@ import { randRange } from './rng.js';
 /** Horizontal drift shared by every wave band, px/s. */
 export const DRIFT_PX_PER_S = 8;
 
-/** Rendering tiers: what each one draws and at what cost. */
+/** Rendering tiers: what each one draws and at what cost (glints: live glitter-path slots, core/shimmer.js). */
 export const QUALITY_TIERS = Object.freeze({
-  high: Object.freeze({ tier: 'high', dprCap: 2, fps: 60, maxDrops: 220, stars: true, ripples: true, blur: true }),
-  medium: Object.freeze({ tier: 'medium', dprCap: 1.5, fps: 30, maxDrops: 160, stars: true, ripples: true, blur: false }),
-  low: Object.freeze({ tier: 'low', dprCap: 1, fps: 24, maxDrops: 80, stars: false, ripples: false, blur: false }),
-  off: Object.freeze({ tier: 'off', dprCap: 1, fps: 10, maxDrops: 0, stars: false, ripples: false, blur: false }),
+  high: Object.freeze({ tier: 'high', dprCap: 2, fps: 60, maxDrops: 220, stars: true, ripples: true, blur: true, glints: 14 }),
+  medium: Object.freeze({ tier: 'medium', dprCap: 1.5, fps: 30, maxDrops: 160, stars: true, ripples: true, blur: false, glints: 6 }),
+  low: Object.freeze({ tier: 'low', dprCap: 1, fps: 24, maxDrops: 80, stars: false, ripples: false, blur: false, glints: 0 }),
+  off: Object.freeze({ tier: 'off', dprCap: 1, fps: 10, maxDrops: 0, stars: false, ripples: false, blur: false, glints: 0 }),
 });
 
 function atMost(value, limit) {
   return Number.isFinite(value) && value <= limit;
 }
 
-/** Pick a tier from device hints and settings → { tier, dprCap, fps, maxDrops, stars, ripples, blur }. */
+/** Pick a tier from device hints and settings → { tier, dprCap, fps, maxDrops, stars, ripples, blur, glints }. */
 export function pickQuality({ width, deviceMemory, hardwareConcurrency, coarse, saveData, motion, scene }) {
   if (scene === 'off' || motion === 'still') return { ...QUALITY_TIERS.off };
   if (atMost(deviceMemory, 2) || atMost(hardwareConcurrency, 2) || Boolean(saveData)) return { ...QUALITY_TIERS.low };
@@ -25,11 +25,12 @@ export function pickQuality({ width, deviceMemory, hardwareConcurrency, coarse, 
 }
 
 // Four wave bands: baseline (fraction of h), amplitude (px at reference height), components [λ px, ω rad/s, weight].
+// Weights fall with spatial frequency; the last term of bands 1–3 is the fine ripple. Every |ω| ≤ 0.3 rad/s.
 const WAVE_BAND_SPECS = [
   { base: 0.6, amp: 4, components: [[220, 0.18, 1], [130, -0.11, 0.5]] },
-  { base: 0.72, amp: 7, components: [[300, 0.14, 1], [170, -0.09, 0.45], [90, 0.21, 0.2]] },
-  { base: 0.84, amp: 11, components: [[420, 0.11, 1], [230, -0.08, 0.5], [120, 0.17, 0.25]] },
-  { base: 0.95, amp: 16, components: [[560, 0.09, 1], [310, -0.07, 0.5], [150, 0.13, 0.25]] },
+  { base: 0.72, amp: 7, components: [[300, 0.14, 1], [170, -0.09, 0.45], [90, 0.21, 0.2], [46, 0.24, 0.07]] },
+  { base: 0.84, amp: 11, components: [[420, 0.11, 1], [230, -0.08, 0.5], [120, 0.17, 0.25], [62, -0.21, 0.09]] },
+  { base: 0.95, amp: 16, components: [[560, 0.09, 1], [310, -0.07, 0.5], [150, 0.13, 0.25], [84, 0.23, 0.1]] },
 ];
 const REFERENCE_HEIGHT = 409;
 const MAX_AMP_SCALE = 1.6;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTimerCore, endFadePlan, chimeEvents } from '../docs/js/core/timer-core.js';
+import { createTimerCore, endFadePlan, chimeEvents, chimeFrequencies } from '../docs/js/core/timer-core.js';
 
 const now = () => Date.now();
 const T0 = 1_700_000_000_000;
@@ -139,14 +139,29 @@ test('a fade that should already have started fades over whatever time is left',
   assert.deepEqual(zero.events.map((e) => e.value), [0.5, 0]);
 });
 
-test('chime: C5 then G5, 1.2 s each, 0.4 s overlap, peak 0.15', () => {
+test('chimeFrequencies: octave and twelfth of the carrier, folded down an octave at a time while the twelfth is above 1 kHz', () => {
+  const table = { 264: [528, 792], 440: [440, 660], 330: [660, 990], 528: [528, 792], 660: [660, 990], 198: [396, 594], 110: [220, 330] };
+  for (const [carrier, pitches] of Object.entries(table)) assert.deepEqual(chimeFrequencies(Number(carrier)), pitches, `${carrier} Hz`);
+  assert.deepEqual(chimeFrequencies(), [528, 792], 'default carrier 264 Hz');
+  for (let f = 100; f <= 1200; f += 7) {
+    const [a, b] = chimeFrequencies(f);
+    assert.ok(Math.abs(b / a - 1.5) < 1e-12, 'a fifth apart');
+    if (3 * f > 1000) assert.ok(b > 500 && b <= 1000, `${f} Hz folds its twelfth into (500, 1000]: ${b}`);
+    else assert.deepEqual([a, b], [2 * f, 3 * f], `${f} Hz is not folded`);
+    assert.ok(Number.isInteger(Math.log2((3 * f) / b)), 'folded by whole octaves');
+  }
+});
+
+test('chime: the octave then the twelfth of the carrier, 1.2 s each, 0.4 s overlap, peak 0.15 unless given', () => {
   const chime = chimeEvents(12.5);
   assert.deepEqual(chime, [
-    { freq: 523.25, startT: 12.5, duration: 1.2, peak: 0.15 },
-    { freq: 783.99, startT: 13.3, duration: 1.2, peak: 0.15 },
+    { freq: 528, startT: 12.5, duration: 1.2, peak: 0.15 },
+    { freq: 792, startT: 13.3, duration: 1.2, peak: 0.15 },
   ]);
   const overlap = chime[0].startT + chime[0].duration - chime[1].startT;
   assert.ok(Math.abs(overlap - 0.4) < 1e-9);
+  assert.deepEqual(chimeEvents(12.5, { carrierHz: 440, peak: 0.03 }).map((e) => [e.freq, e.peak]), [[440, 0.03], [660, 0.03]]);
+  assert.deepEqual(chimeEvents(0, { carrierHz: undefined, peak: undefined }).map((e) => [e.freq, e.peak]), [[528, 0.15], [792, 0.15]], 'missing hooks fall back');
 });
 
 test('timer core requires an injected clock', () => {

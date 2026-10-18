@@ -2,7 +2,7 @@
 // Cache and storage names carry the braintune- prefix because every project site of one GitHub user shares an origin.
 'use strict';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const CACHE = 'braintune-v' + VERSION;
 const ROOT = new URL('./', self.location).pathname;
 const OFFLINE_MESSAGE = 'Brain Tune is offline and this file is not cached.';
@@ -32,6 +32,7 @@ const SHELL = [
   './js/core/biquad.js',
   './js/core/levels.js',
   './js/core/timbres.js',
+  './js/core/voicing.js',
   './js/core/gate.js',
   './js/core/entrainment.js',
   './js/core/presets.js',
@@ -49,6 +50,12 @@ const SHELL = [
   './js/core/cat-model.js',
   './js/core/cat-art.js',
   './js/core/sweep.js',
+  './js/core/fractal.js',
+  './js/core/texture-model.js',
+  './js/core/entrance.js',
+  './js/core/canon.js',
+  './js/core/shimmer.js',
+  './js/core/dim-model.js',
   './js/audio/graph.js',
   './js/audio/automation.js',
   './js/audio/buffers.js',
@@ -56,6 +63,8 @@ const SHELL = [
   './js/audio/rain.js',
   './js/audio/ocean.js',
   './js/audio/purr.js',
+  './js/audio/texture.js',
+  './js/audio/canon.js',
   './js/audio/session-timer.js',
   './js/audio/lifecycle.js',
   './js/audio/engine.js',

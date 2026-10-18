@@ -1,9 +1,11 @@
-// Mediator (plan §5): store → engine / scene / cats / UI, <html> attributes, media-query listeners, service worker
-// registration and the window.__braintune debug hooks. The audio, scene and cats modules load dynamically and the
-// page degrades gracefully without any of them.
+// Mediator (plan §5, v0.4 spec §5): store → engine / scene / cats / UI, engine → scene (wave rolls, slow texture),
+// <html> attributes, media-query listeners, the night dim's deep stage, service worker registration and the
+// window.__braintune debug hooks. The audio, scene and cats modules load dynamically and the page degrades
+// gracefully without any of them.
 
-import { createStore, parse, STORAGE_KEY } from './core/state.js';
+import { createStore, parse, startPlan, STORAGE_KEY } from './core/state.js';
 import { STRINGS } from './core/microcopy.js';
+import { getPreset, DEFAULT_PRESET_ID } from './core/presets.js';
 import { mulberry32 } from './core/rng.js';
 import { bandPalette } from './core/palette.js';
 import { pickQuality } from './core/scene-model.js';
@@ -17,6 +19,10 @@ import { mountUI, settingsBand } from './ui/ui.js';
 const LAYERS = ['tone', 'rain', 'ocean', 'purr'];
 const SOUNDING = new Set(['starting', 'playing', 'ambient', 'ending']);
 const PALETTE_FADE_MS = 2500;
+/** The deep night-dim stage fades the canvas over 2 s; held this long, the scene stops on its last frame. */
+const DEEP_DIM_STOP_MS = 2100;
+/** Loops are generated this long after load, once the first frame is up, when a session may start soon. */
+const PREWARM_DELAY_MS = 300;
 const RESIZE_DEBOUNCE_MS = 150;
 const MIN_TARGET_PX = 44;
 const INTERACTIVE = 'a[href], button, input, select, textarea, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])';
@@ -79,11 +85,11 @@ function touchTargets() {
     .map(({ el, rect }) => ({ element: `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}`, width: Math.round(rect.width), height: Math.round(rect.height) }));
 }
 
-/** Service worker registration (or the ?nosw kill switch) at load; toasts go through the UI once it is mounted. */
-function scheduleWorkerRegistration(getToaster) {
+/** Service worker registration (or the ?nosw kill switch) at load; toasts go through the UI once it is mounted (it holds a sticky one back at night). */
+function scheduleWorkerRegistration(notify) {
   const register = () => registerServiceWorker({
-    onOfflineReady: () => getToaster()?.show({ id: 'offline', text: STRINGS.toasts.offlineReady }),
-    onUpdateReady: (apply) => getToaster()?.show({ id: 'update', text: STRINGS.toasts.updateReady.text, sticky: true, action: { label: STRINGS.toasts.updateReady.action, onAction: apply } }),
+    onOfflineReady: () => notify({ id: 'offline', text: STRINGS.toasts.offlineReady }),
+    onUpdateReady: (apply) => notify({ id: 'update', text: STRINGS.toasts.updateReady.text, sticky: true, action: { label: STRINGS.toasts.updateReady.action, onAction: apply } }),
   });
   if (document.readyState === 'complete') register();
   else window.addEventListener('load', register, { once: true });
@@ -92,7 +98,7 @@ function scheduleWorkerRegistration(getToaster) {
 async function main() {
   const root = document.documentElement;
   let ui = null;
-  scheduleWorkerRegistration(() => ui?.toaster);
+  scheduleWorkerRegistration((toast) => ui?.notify(toast));
   const store = createStore(safeStorage(), { debounceMs: 250, setTimer, clearTimer });
   const mq = Object.fromEntries(Object.entries(QUERIES).map(([name, query]) => [name, matchMedia(query)]));
   const [{ createEngine } = {}, lifecycle = {}, { createScene } = {}, { createCats } = {}, { createToonLayer } = {}] = await Promise.all([
@@ -106,6 +112,7 @@ async function main() {
   const rng = mulberry32((Date.now() ^ Math.floor(Math.random() * 2 ** 31)) >>> 0);
   const themeMeta = document.querySelector('meta[name="theme-color"]');
 
+  const moodOf = (s) => (getPreset(s.presetId) ?? getPreset(DEFAULT_PRESET_ID)).mood;
   const layoutName = () => (mq.desktop.matches ? 'desktop' : mq.short.matches ? 'short' : 'phone');
   const stillNow = (s = store.get()) => s.motion === 'still' || (s.motion === 'auto' && mq.reducedMotion.matches);
   const themeNow = (s = store.get()) => (s.theme === 'auto' ? (mq.light.matches ? 'light' : 'dark') : s.theme);
@@ -196,14 +203,33 @@ async function main() {
     scene?.setStill(still);
   }
 
+  let sceneAsleep = false; // html[data-dim="deep"] has held for DEEP_DIM_STOP_MS: the canvas keeps its last frame
+  let asleepTimer = null;
+
   function syncSceneRunning() {
     if (!scene) return;
-    if (document.hidden || sheet.isExpanded()) scene.stop();
+    if (document.hidden || sheet.isExpanded() || sceneAsleep) scene.stop();
     else scene.start();
   }
 
+  /** Night dim stage → scene: the deep stage stops the drawing once its fade has run; any other stage draws again. */
+  function onDim(stage) {
+    clearTimer(asleepTimer);
+    asleepTimer = null;
+    sceneAsleep = false;
+    if (stage === 'deep') {
+      asleepTimer = setTimer(() => {
+        asleepTimer = null;
+        sceneAsleep = true;
+        syncSceneRunning();
+      }, DEEP_DIM_STOP_MS);
+    }
+    syncSceneRunning();
+  }
+
   function applyCats(s) {
-    // Cell-shaded cats frolic in the background whenever a purr is audible.
+    // Cell-shaded cats frolic in the background whenever a purr is audible; quieter company in the sleepy presets.
+    toon?.setMood(moodOf(s) === 'sleepy' ? 'night' : 'day');
     toon?.setActive(playing && s.cats.enabled && !s.muted.purr && s.mix.purr > 0 && s.mix.master > 0);
     if (!cats) return;
     cats.setEnabled(s.cats.enabled);
@@ -222,7 +248,8 @@ async function main() {
 
   // --- engine → scene / cats ---------------------------------------------------------------------------------
   if (engine) {
-    engine.on('wave', ({ inMs = 0, duration }) => scene?.rollWave(performance.now() + inMs, duration));
+    engine.on('wave', ({ inMs = 0, duration, strength }) => scene?.rollWave(performance.now() + inMs, duration, strength));
+    engine.on('texture', ({ inMs = 0, pad, gust, set }) => scene?.setTexture({ pad, gust, set }, performance.now() + inMs));
     engine.on('state', ({ state }) => {
       playing = SOUNDING.has(state);
       applyCats(store.get());
@@ -276,7 +303,7 @@ async function main() {
   const initial = store.get();
   applyAttributes(initial);
   ui = mountUI(root, {
-    store, engine, scene, cats, platform, lifecycle, sheet, announcer, version: APP_VERSION, now, setTimer, clearTimer,
+    store, engine, scene, cats, platform, lifecycle, sheet, announcer, version: APP_VERSION, now, setTimer, clearTimer, onDim,
     resetSite: () => resetBraintune({ storage: safeStorage() }),
   });
   applyPalette(initial);
@@ -288,6 +315,8 @@ async function main() {
   syncSceneRunning();
   cats?.start();
   root.dataset.ready = 'true';
+  // No AudioContext before a gesture (v0.4 D3): when a session may start soon, only the noise loops are generated.
+  if (engine && (initial.autoplay || startPlan(initial, now()).kind === 'resume')) setTimer(() => guard('prewarm', () => engine.prewarm()), PREWARM_DELAY_MS);
 
   window.__braintune = {
     version: APP_VERSION,

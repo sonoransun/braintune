@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../docs/js/core/rng.js';
 import { CAT_CONFIG, createCatScheduler, placeCat, rectsIntersect } from '../docs/js/core/cat-model.js';
+import { COATS, POSES } from '../docs/js/core/cat-art.js';
 
 const viewport = { w: 1024, h: 768 };
 const baseCtx = { playing: true, band: 'alpha', purr: 0, still: false, presetId: 'calm', viewport, layout: 'desktop', activeCount: 0 };
@@ -12,23 +13,41 @@ function sample(fn, n) {
   return out;
 }
 
-test('CAT_CONFIG matches §5 and is frozen', () => {
+test('CAT_CONFIG matches §5 with the v0.4 tables (D2: lively sleepy cats, peek pose, tuxedo coat) and is frozen', () => {
   assert.deepEqual(CAT_CONFIG.maxConcurrent, { narrow: 2, default: 3 });
   assert.equal(CAT_CONFIG.minTogether, 2);
   assert.deepEqual(CAT_CONFIG.companionDelayMs, [1200, 3500]);
-  assert.deepEqual(CAT_CONFIG.firstDelayMs, { playing: [4e3, 9e3], idle: [10e3, 20e3] });
+  assert.deepEqual(CAT_CONFIG.firstDelayMs, { playing: [4e3, 9e3], idle: [10e3, 20e3] }, 'no sleepy first-visit delay (D2)');
   assert.deepEqual(CAT_CONFIG.gapMs, { playing: [20e3, 60e3], idle: [40e3, 100e3] });
-  assert.deepEqual(CAT_CONFIG.dwellMs, { sit: [25e3, 60e3], loaf: [30e3, 70e3], sleep: [60e3, 180e3] });
+  assert.deepEqual(CAT_CONFIG.dwellMs, { sit: [25e3, 60e3], loaf: [30e3, 70e3], sleep: [60e3, 180e3], peek: [15e3, 40e3] });
   assert.deepEqual(CAT_CONFIG.walkSpeedPxPerS, [28, 40]);
-  assert.deepEqual(Object.keys(CAT_CONFIG.poseWeights), ['sleepy', 'calm', 'alert', 'idle', 'still']);
-  assert.deepEqual(CAT_CONFIG.poseWeights.still, { sit: 0.5, loaf: 0.5 });
-  assert.deepEqual(CAT_CONFIG.coatWeights, { black: 1, orangeTabby: 1, grey: 1, calico: 1 });
+  assert.deepEqual(CAT_CONFIG.zoomies, { chance: 0.18, speedPxPerS: [80, 120] });
+  assert.deepEqual(CAT_CONFIG.poseWeights, {
+    sleepy: { sleep: 0.26, loaf: 0.18, sit: 0.08, peek: 0.08, walk: 0.4 },
+    calm: { sit: 0.26, loaf: 0.2, peek: 0.1, walk: 0.44 },
+    alert: { walk: 0.56, sit: 0.22, loaf: 0.12, peek: 0.1 },
+    idle: { walk: 0.46, sit: 0.28, loaf: 0.18, peek: 0.08 },
+    still: { sit: 0.45, loaf: 0.45, peek: 0.1 },
+  });
+  assert.deepEqual(CAT_CONFIG.coatWeights, { black: 1, orangeTabby: 1, grey: 1, calico: 1, tuxedo: 0.8 });
   assert.equal(CAT_CONFIG.afterPetExtraMs, 10e3);
   assert.equal(CAT_CONFIG.callCooldownMs, 20e3);
   assert.deepEqual(CAT_CONFIG.blinkEveryMs, [4e3, 9e3]);
   assert.deepEqual(CAT_CONFIG.blinkEveryStillMs, [8e3, 14e3]);
   assert.equal(CAT_CONFIG.catnapGapScale, 0.6);
   assert.ok(Object.isFrozen(CAT_CONFIG) && Object.isFrozen(CAT_CONFIG.poseWeights.calm));
+});
+
+test('the pose weights of every mood sum to 1; every pose drawn has art and (unless it walks) a dwell range', () => {
+  for (const [mood, weights] of Object.entries(CAT_CONFIG.poseWeights)) {
+    const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(sum - 1) <= 1e-9, `${mood} sums to ${sum}`);
+    for (const pose of Object.keys(weights)) {
+      assert.ok(POSES.includes(pose), `${mood}: ${pose} is a known pose`);
+      if (pose !== 'walk') assert.ok(Array.isArray(CAT_CONFIG.dwellMs[pose]), `${mood}: ${pose} has a dwell range`);
+    }
+  }
+  assert.deepEqual(Object.keys(CAT_CONFIG.coatWeights), Object.keys(COATS), 'every coat can visit');
 });
 
 test('arrival delays fall in the configured ranges for first visit, playing, idle and catnap', () => {
@@ -39,6 +58,8 @@ test('arrival delays fall in the configured ranges for first visit, playing, idl
     assert.ok(Math.min(...xs) < lo + (hi - lo) * 0.05 && Math.max(...xs) > hi - (hi - lo) * 0.05, 'spans the range');
   };
   check({ playing: true, firstEver: true, presetId: 'calm' }, [4e3, 9e3]);
+  check({ playing: true, firstEver: true, presetId: 'sleep' }, [4e3, 9e3]); // D2: bedtime cats come as soon as any
+  check({ playing: true, firstEver: true, presetId: 'deep' }, [4e3, 9e3]);
   check({ playing: false, firstEver: true, presetId: 'calm' }, [10e3, 20e3]);
   check({ playing: true, firstEver: false, presetId: 'calm' }, [20e3, 60e3]);
   check({ playing: false, firstEver: false, presetId: 'calm' }, [40e3, 100e3]);
@@ -75,7 +96,7 @@ test('plan shape: ids count up, enter 600 / exit 500, dwell and speed per pose, 
     assert.equal(p.enterMs, 600);
     assert.equal(p.exitMs, 500);
     assert.equal(typeof p.flip, 'boolean');
-    assert.ok(['black', 'orangeTabby', 'grey', 'calico'].includes(p.coat));
+    assert.ok(Object.keys(COATS).includes(p.coat), p.coat);
     assert.ok(p.blinkEveryMs >= 4e3 && p.blinkEveryMs <= 9e3);
     if (p.pose === 'walk') {
       const [lo, hi] = p.zoom ? CAT_CONFIG.zoomies.speedPxPerS : CAT_CONFIG.walkSpeedPxPerS;
@@ -95,9 +116,12 @@ test('plan shape: ids count up, enter 600 / exit 500, dwell and speed per pose, 
   assert.ok(crossingS > (viewport.w + 112) / fast - 0.01 && crossingS < (viewport.w + 112) / slow + 0.01);
   const stillPlan = createCatScheduler({ rng: mulberry32(5) }).plan({ ...baseCtx, still: true });
   assert.ok(stillPlan.blinkEveryMs >= 8e3 && stillPlan.blinkEveryMs <= 14e3);
+  const peeks = plans.filter((p) => p.pose === 'peek');
+  assert.ok(peeks.length > 10, `peekers visit (${peeks.length}/400)`);
+  for (const p of peeks) assert.ok(p.dwellMs >= 15e3 && p.dwellMs <= 40e3 && p.speedPxPerS === null && !p.zoom, `peek dwell ${p.dwellMs}`);
 });
 
-test('pose frequencies match the mood weights ± 2 % and coats are uniform', () => {
+test('pose frequencies match the mood weights ± 2 % and coat shares match the coat weights ± 2 %', () => {
   const N = 20000;
   const contexts = {
     sleepy: { ...baseCtx, presetId: 'sleep' },
@@ -121,20 +145,23 @@ test('pose frequencies match the mood weights ± 2 % and coats are uniform', () 
       const freq = (counts[pose] ?? 0) / N;
       assert.ok(Math.abs(freq - w) <= 0.02, `${mood}/${pose}: ${freq} vs ${w}`);
     }
-    for (const c of ['black', 'orangeTabby', 'grey', 'calico']) assert.ok(Math.abs(coats[c] / N - 0.25) <= 0.02, `${mood} coat ${c}`);
+    const coatTotal = Object.values(CAT_CONFIG.coatWeights).reduce((a, b) => a + b, 0);
+    for (const [c, w] of Object.entries(CAT_CONFIG.coatWeights)) {
+      assert.ok(Math.abs((coats[c] ?? 0) / N - w / coatTotal) <= 0.02, `${mood} coat ${c}: ${(coats[c] ?? 0) / N} vs ${w / coatTotal}`);
+    }
   }
 });
 
-test('still mood never walks or sleeps; sleepy cats mostly rest but sometimes frolic', () => {
+test('still mood never walks or sleeps; sleepy cats still walk and frolic 40 % of the time (D2)', () => {
   const s = createCatScheduler({ rng: mulberry32(6) });
   let sleepyWalks = 0;
   for (let i = 0; i < 5000; i++) {
     const still = s.plan({ ...baseCtx, still: true });
-    assert.ok(still.pose === 'sit' || still.pose === 'loaf', still.pose);
+    assert.ok(['sit', 'loaf', 'peek'].includes(still.pose), still.pose);
     assert.equal(still.speedPxPerS, null);
     if (s.plan({ ...baseCtx, presetId: 'rest' }).pose === 'walk') sleepyWalks += 1;
   }
-  assert.ok(sleepyWalks > 1700 && sleepyWalks < 2300, `sleepy walk share ${sleepyWalks / 5000}`);
+  assert.ok(sleepyWalks >= 1900 && sleepyWalks <= 2100, `sleepy walk share ${sleepyWalks / 5000} should be 0.40 ± 0.02`);
 });
 
 test('rectsIntersect: overlap, touching edges and margin', () => {

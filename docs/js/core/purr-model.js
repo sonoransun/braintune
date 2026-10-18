@@ -1,5 +1,7 @@
 // Purr model: the fixed purr recipe, the breath-cycle planner and the pet-cue envelope
-// (§5, §6.4 of the plan). Pure: the RNG is injected and times are context seconds.
+// (§5, §6.4 of the plan). Since 0.4 each breath can take a slow drift from the session
+// texture (tempo stretches the phases, amplitude scales the levels). Pure: the RNG is
+// injected and times are context seconds.
 // Event format: { param, at, kind: 'set'|'linear'|'target', value, timeConstant? }.
 
 import { randRange } from './rng.js';
@@ -32,12 +34,17 @@ export function purrParams(level = 1) {
   return { hz: PURR_HZ, duty: 0.45, ramp: 0.25, depth: 0.9, lpHz: 300, oscDb: -10, busDb: -12, amplitude: clamp01(level) };
 }
 
-/** One breath from t0: inhale U(0.7, 1.0) s at 0.75·A (rate 27/26, lp 260 Hz), exhale U(0.9, 1.3) s at A (rate 25/26, lp 340 Hz), then a U(0.05, 0.15) s pause; each phase is a raised-cosine-edged plateau (80 ms edges) that starts and ends at 0 → { events sorted by at, nextStart, phases }. */
-export function planBreath(rng, t0, params) {
-  const amplitude = params.amplitude ?? 1;
-  const inhale = randRange(rng, PHASES.inhale.seconds[0], PHASES.inhale.seconds[1]);
-  const exhale = randRange(rng, PHASES.exhale.seconds[0], PHASES.exhale.seconds[1]);
-  const pause = randRange(rng, PAUSE_SECONDS[0], PAUSE_SECONDS[1]);
+/**
+ * One breath from t0: inhale U(0.7, 1.0)·tempo s at 0.75·A (rate 27/26, lp 260 Hz), exhale U(0.9, 1.3)·tempo s at A
+ * (rate 25/26, lp 340 Hz), then a U(0.05, 0.15)·tempo s pause, with A = params.amplitude · drift amplitude; each phase is a
+ * raised-cosine-edged plateau (80 ms edges) that starts and ends at 0 → { events sorted by at, nextStart, phases }.
+ * Without a drift (tempo 1, amplitude 1) the events are exactly those of 0.3.
+ */
+export function planBreath(rng, t0, params, { tempo = 1, amplitude: depth = 1 } = {}) {
+  const amplitude = (params.amplitude ?? 1) * depth;
+  const inhale = randRange(rng, PHASES.inhale.seconds[0], PHASES.inhale.seconds[1]) * tempo;
+  const exhale = randRange(rng, PHASES.exhale.seconds[0], PHASES.exhale.seconds[1]) * tempo;
+  const pause = randRange(rng, PAUSE_SECONDS[0], PAUSE_SECONDS[1]) * tempo;
   const tExhale = t0 + inhale;
   const events = [
     ...phaseEvents(t0, inhale, PHASES.inhale, PHASES.exhale, amplitude),

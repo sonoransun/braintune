@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-band="alpha" data-motion="full" data-scene="full" data-cats="on" data-layout="phone" data-pointer="coarse" data-sheet="peek" data-dim="none">
+<html lang="en" data-theme="dark" data-band="delta" data-motion="full" data-scene="full" data-cats="on" data-layout="phone" data-pointer="coarse" data-sheet="peek" data-dim="none">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,7 +7,7 @@
 <title>Brain Tune</title>
 <meta name="description" content="Set your head straight. Gentle brainwave tuning with rain, ocean and the occasional cat.">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#05161C">
+<meta name="theme-color" content="#070A1F">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
@@ -73,11 +73,11 @@
     </button>
 
     <div class="status-block" data-cat-avoid>
-      <p class="status" id="status">Calm · 10 Hz</p>
+      <p class="status" id="status">Sleep · 2 Hz</p>
       <p class="sub" id="sub">Ready when you are.</p>
       <p class="time-left" id="time-left" hidden></p>
       <p class="hint" id="hint" hidden>Tap the glow to begin</p>
-      <p class="restart" id="restart" hidden><button type="button" class="link" id="restart-sound">Sound stopped? Restart sound</button></p>
+      <p class="restart" id="restart" hidden><button type="button" class="link" id="restart-sound">Restart sound</button></p>
     </div>
   </section>
 
@@ -90,7 +90,7 @@
           <svg class="icon icon--play" aria-hidden="true"><use href="#i-play"></use></svg>
           <svg class="icon icon--pause" aria-hidden="true"><use href="#i-pause"></use></svg>
         </button>
-        <a class="mini__status" id="mini-status" href="#orb">Calm · 10 Hz</a>
+        <a class="mini__status" id="mini-status" href="#orb">Sleep · 2 Hz</a>
         <span class="mini__time" id="mini-time"></span>
       </div>
     </div>
@@ -135,7 +135,7 @@
             <button type="button" class="mute" id="mute-purr" aria-pressed="false" aria-label="Mute Purr"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg></button>
           </div>
         </div>
-        <p class="note" id="purr-note">A ~26 Hz comfort rumble, not part of the tuning.</p>
+        <p class="note" id="purr-note">A low purr near 26 Hz, there for comfort. It plays no part in the beat.</p>
       </section>
 
       <section class="section section--timer" aria-labelledby="h-timer">
@@ -187,13 +187,21 @@
               <legend class="segment__legend">Timbre</legend>
               <label class="segment__option"><input type="radio" name="timbre" value="sine"><span>Sine</span></label>
               <label class="segment__option"><input type="radio" name="timbre" value="velvet" checked><span>Velvet</span></label>
-              <label class="segment__option"><input type="radio" name="timbre" value="glass"><span>Glass</span></label>
               <label class="segment__option"><input type="radio" name="timbre" value="warm"><span>Warm</span></label>
+              <label class="segment__option"><input type="radio" name="timbre" value="amber"><span>Amber</span></label>
+              <label class="segment__option"><input type="radio" name="timbre" value="glass"><span>Glass</span></label>
+              <label class="segment__option"><input type="radio" name="timbre" value="bell"><span>Bell</span></label>
             </fieldset>
             <div class="setting">
               <span class="setting__label" id="pad-label">Pad</span>
               <button type="button" class="switch" id="pad" role="switch" aria-checked="true" aria-labelledby="pad-label"><span class="switch__knob"></span></button>
             </div>
+            <fieldset class="segment" id="pad-style">
+              <legend class="segment__legend">Pad style</legend>
+              <label class="segment__option"><input type="radio" name="pad-style" value="auto" checked><span>Auto</span></label>
+              <label class="segment__option"><input type="radio" name="pad-style" value="drone"><span>Drone</span></label>
+              <label class="segment__option"><input type="radio" name="pad-style" value="canon"><span>Canon</span></label>
+            </fieldset>
             <fieldset class="segment" id="style">
               <legend class="segment__legend">Beat style</legend>
               <label class="segment__option"><input type="radio" name="style" value="auto" checked><span>Auto</span></label>
@@ -221,8 +229,9 @@
                 <div class="disclosure__inner prose">
                   <p>Beat is the slow rhythm your brain is invited to follow, in cycles per second. Lower feels sleepier, higher more alert.</p>
                   <p>Pitch is the tone that carries the beat. It does not change the tuning, so choose whatever sounds comfortable.</p>
-                  <p>Timbre is the colour of the tone, from a plain sine to a warmer, richer voice.</p>
-                  <p>Pad adds a quiet fifth, octave and sub beneath the tone.</p>
+                  <p>Timbre is the colour of the tone. Sine is plain, Velvet and Warm are rounder, Amber is octave-rich, Glass and Bell are sparse and clear.</p>
+                  <p>Pad adds a quiet octave and fifth above the tone and a sub below it, all in pure ratios. At low pitches the fifth sits an octave higher, and the voices enter one at a time over the first minute.</p>
+                  <p>Drone holds the harmony and lets it breathe. Canon adds two slow voices, one answering the other a few notes later, as in a round. Auto uses Canon in Meditate and Calm.</p>
                   <p>Beat style chooses how the beat is made. Binaural needs headphones. Pulsing works out loud. Wavering sums both tones in the centre. Auto picks for you.</p>
                   <p>Rainfall sets how hard the rain falls; the Rain slider sets how loud it is.</p>
                   <p>Sea sets how big the waves are; the Ocean slider sets how loud they are.</p>
@@ -262,17 +271,9 @@
         <div class="setting">
           <div class="setting__text">
             <span class="setting__label" id="autoplay-label">Play on open</span>
-            <span class="setting__desc" id="autoplay-desc">Starts Sleep as soon as Brain Tune opens. Some browsers wait for a first tap.</span>
+            <span class="setting__desc" id="autoplay-desc">Begins your last preset as soon as Brain Tune opens. Some browsers wait for a tap first.</span>
           </div>
           <button type="button" class="switch" id="autoplay" role="switch" aria-checked="true" aria-labelledby="autoplay-label" aria-describedby="autoplay-desc"><span class="switch__knob"></span></button>
-        </div>
-
-        <div class="setting" id="keep-awake-row" hidden>
-          <div class="setting__text">
-            <span class="setting__label" id="keep-awake-label">Keep screen awake</span>
-            <span class="setting__desc" id="keep-awake-desc">Stops the screen turning off during a session.</span>
-          </div>
-          <button type="button" class="switch" id="keep-awake" role="switch" aria-checked="false" aria-labelledby="keep-awake-label" aria-describedby="keep-awake-desc"><span class="switch__knob"></span></button>
         </div>
 
         <fieldset class="segment" id="theme" aria-describedby="theme-desc">
@@ -291,25 +292,10 @@
           <button type="button" class="switch" id="still" role="switch" aria-checked="false" aria-labelledby="still-label" aria-describedby="still-desc"><span class="switch__knob"></span></button>
         </div>
 
-        <fieldset class="segment" id="scene-setting" aria-describedby="scene-desc">
-          <legend class="segment__legend">Scene</legend>
-          <label class="segment__option"><input type="radio" name="scene" value="full" checked><span>Full</span></label>
-          <label class="segment__option"><input type="radio" name="scene" value="off"><span>Off</span></label>
-        </fieldset>
-        <p class="setting__desc" id="scene-desc">The animated sky and sea behind the controls.</p>
-
-        <div class="setting" id="haptics-row" hidden>
-          <div class="setting__text">
-            <span class="setting__label" id="haptics-label">Haptics</span>
-            <span class="setting__desc" id="haptics-desc">A light tap when you change something.</span>
-          </div>
-          <button type="button" class="switch" id="haptics" role="switch" aria-checked="true" aria-labelledby="haptics-label" aria-describedby="haptics-desc"><span class="switch__knob"></span></button>
-        </div>
-
         <div class="setting">
           <div class="setting__text">
             <span class="setting__label" id="night-dim-label">Night dim</span>
-            <span class="setting__desc" id="night-dim-desc">During Sleep, Deep sleep and Rest, the screen dims after a minute of quiet.</span>
+            <span class="setting__desc" id="night-dim-desc">In Sleep, Deep sleep and Rest the screen dims after a minute of stillness and settles further after five.</span>
           </div>
           <button type="button" class="switch" id="night-dim" role="switch" aria-checked="true" aria-labelledby="night-dim-label" aria-describedby="night-dim-desc"><span class="switch__knob"></span></button>
         </div>
@@ -322,21 +308,51 @@
           <button type="button" class="switch" id="shortcuts" role="switch" aria-checked="true" aria-labelledby="shortcuts-label" aria-describedby="shortcuts-desc"><span class="switch__knob"></span></button>
         </div>
 
-        <div class="setting install" id="install-row">
-          <div class="setting__text">
-            <span class="setting__label" id="install-label">Add to home screen</span>
-            <span class="setting__desc" id="install-desc">Open Brain Tune like an app, offline too.</span>
-            <span class="setting__desc" id="install-generic">Use your browser's Add to Home Screen / Install option</span>
-          </div>
-          <button type="button" class="btn btn--small" id="install" aria-describedby="install-desc" hidden>Install</button>
-        </div>
+        <div class="disclosure disclosure--nested" id="more-settings">
+          <button type="button" class="disclosure__toggle disclosure__toggle--small" id="more-toggle" aria-expanded="false" aria-controls="more-panel">More settings</button>
+          <div class="disclosure__panel" id="more-panel">
+            <div class="disclosure__inner">
+              <fieldset class="segment" id="scene-setting" aria-describedby="scene-desc">
+                <legend class="segment__legend">Scene</legend>
+                <label class="segment__option"><input type="radio" name="scene" value="full" checked><span>Full</span></label>
+                <label class="segment__option"><input type="radio" name="scene" value="off"><span>Off</span></label>
+              </fieldset>
+              <p class="setting__desc" id="scene-desc">The animated sky and sea behind the controls.</p>
 
-        <div class="setting">
-          <div class="setting__text">
-            <span class="setting__label" id="reset-label">Reset all settings</span>
-            <span class="setting__desc" id="reset-desc">Back to the quiet defaults.</span>
+              <div class="setting" id="keep-awake-row" hidden>
+                <div class="setting__text">
+                  <span class="setting__label" id="keep-awake-label">Keep screen awake</span>
+                  <span class="setting__desc" id="keep-awake-desc">Stops the screen turning off during a session.</span>
+                </div>
+                <button type="button" class="switch" id="keep-awake" role="switch" aria-checked="false" aria-labelledby="keep-awake-label" aria-describedby="keep-awake-desc"><span class="switch__knob"></span></button>
+              </div>
+
+              <div class="setting" id="haptics-row" hidden>
+                <div class="setting__text">
+                  <span class="setting__label" id="haptics-label">Haptics</span>
+                  <span class="setting__desc" id="haptics-desc">A light tap when you change something.</span>
+                </div>
+                <button type="button" class="switch" id="haptics" role="switch" aria-checked="true" aria-labelledby="haptics-label" aria-describedby="haptics-desc"><span class="switch__knob"></span></button>
+              </div>
+
+              <div class="setting install" id="install-row">
+                <div class="setting__text">
+                  <span class="setting__label" id="install-label">Add to home screen</span>
+                  <span class="setting__desc" id="install-desc">Open Brain Tune like an app, offline too.</span>
+                  <span class="setting__desc" id="install-generic">Use your browser's Add to Home Screen or Install option</span>
+                </div>
+                <button type="button" class="btn btn--small" id="install" aria-describedby="install-desc" hidden>Install</button>
+              </div>
+
+              <div class="setting">
+                <div class="setting__text">
+                  <span class="setting__label" id="reset-label">Reset all settings</span>
+                  <span class="setting__desc" id="reset-desc">Back to the quiet defaults.</span>
+                </div>
+                <button type="button" class="btn btn--small" id="reset" aria-describedby="reset-desc">Reset</button>
+              </div>
+            </div>
           </div>
-          <button type="button" class="btn btn--small" id="reset" aria-describedby="reset-desc">Reset</button>
         </div>
       </section>
 
@@ -350,7 +366,9 @@
             <ul class="prose__list" id="platform-notes"></ul>
             <p id="about-safety">Brain Tune is for relaxation, not medical treatment. Don't use it while driving. If you have a seizure disorder, a pacemaker, are pregnant or have a hearing condition, ask a professional first. Keep the volume moderate and stop if anything feels uncomfortable.</p>
             <p>Binaural tones need stereo. If your device plays Mono Audio, choose Speakers.</p>
-            <p>Purr is a ~26 Hz comfort rumble, not part of the tuning.</p>
+            <p>A low purr near 26 Hz, there for comfort. It plays no part in the beat.</p>
+            <p>Pitch, pad and chime are tuned in simple whole-number ratios, which sound smooth because their overtones line up. No particular key or frequency is special on its own.</p>
+            <p>In Canon the pad's two slow voices follow simple rules of counterpoint: the second voice imitates the first, sometimes upside down, slower or sooner, and every pair of notes heard together forms a consonant interval.</p>
             <p>Nothing leaves your device.</p>
             <p id="storage-note" hidden>This browser is not keeping site data, so settings last until you close the page.</p>
             <dl class="facts">
@@ -366,7 +384,7 @@
 
 <div class="cats" id="cats" role="group" aria-label="Visiting cats"></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
-<div class="overlay" id="overlay" hidden>
+<div class="overlay" id="overlay" data-mode="veil" hidden>
   <button type="button" class="overlay__button" id="overlay-button"><span class="overlay__text" id="overlay-text">Tap anywhere to let sound through</span></button>
 </div>
 
@@ -388,7 +406,16 @@
           <span class="option__text"><span class="option__label">Headphones</span><span class="option__desc">Each ear hears a slightly different tone: the full binaural effect</span></span>
         </label>
       </fieldset>
-      <p class="firstrun__safety">We start quiet. Brain Tune is for relaxation, not medical treatment. Don't use it while driving. If you have a seizure disorder, a pacemaker, are pregnant or have a hearing condition, ask a professional first. Keep the volume moderate and stop if anything feels uncomfortable.</p>
+      <fieldset class="options" id="firstrun-help">
+        <legend class="options__legend">What would help right now?</legend>
+        <div class="segment">
+          <label class="segment__option"><input type="radio" name="firstrun-help" value="sleep" checked><svg class="icon" aria-hidden="true"><use href="#i-moon"></use></svg><span>Drift off</span></label>
+          <label class="segment__option"><input type="radio" name="firstrun-help" value="calm"><svg class="icon" aria-hidden="true"><use href="#i-wave"></use></svg><span>Settle</span></label>
+          <label class="segment__option"><input type="radio" name="firstrun-help" value="focus"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg><span>Focus</span></label>
+        </div>
+        <p class="note">Sound begins quietly when you tap Let's begin and fades in over a few seconds.</p>
+      </fieldset>
+      <p class="firstrun__safety">Brain Tune is for relaxation, not medical treatment. Don't use it while driving. If you have a seizure disorder, a pacemaker, are pregnant or have a hearing condition, ask a professional first. Keep the volume moderate and stop if anything feels uncomfortable.</p>
     </div>
     <div class="firstrun__actions">
       <button type="submit" class="btn btn--primary" id="firstrun-begin" value="begin">Let's begin</button>

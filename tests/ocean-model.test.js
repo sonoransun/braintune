@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WAVE_PARAMS, MIN_WAVE_PERIOD, oceanParams, planWave } from '../docs/js/core/ocean-model.js';
 import { mulberry32 } from '../docs/js/core/rng.js';
-import { dbToGain } from '../docs/js/core/levels.js';
+import { crashPeakDb, dbToGain } from '../docs/js/core/levels.js';
 
 const near = (actual, expected, tol, what = 'value') =>
   assert.ok(Math.abs(actual - expected) <= tol, `${what} ${actual} is not within ${tol} of ${expected}`);
@@ -19,12 +19,15 @@ test('oceanParams matches the plan table at the ends and clamps intensity', () =
   assert.deepEqual(oceanParams(2).periodRange, [6, 12]);
   assert.deepEqual(calm.swell, { Tb: [2.5, 4], lpFrom: 250, lpTo: 700, peakDb: -12 });
   assert.deepEqual(wild.swell, { Tb: [2.5, 4], lpFrom: 250, lpTo: 1400, peakDb: -6 });
-  assert.deepEqual(calm.crash, { bpFrom: 2600, bpTo: 800, Q: 0.8, peakDb: -6, release: 0.6 });
+  assert.deepEqual(calm.crash, { bpFrom: 2600, bpTo: 800, Q: 0.8, peakDb: -10, release: 0.6 });
   assert.deepEqual(wild.crash, { bpFrom: 2600, bpTo: 800, Q: 0.8, peakDb: 0, release: 1 });
+  for (const i of INTENSITIES) assert.equal(oceanParams(i).crash.peakDb, crashPeakDb(i), `crash peak at i = ${i} is the level budget's`);
+  near(oceanParams(0.25).crash.peakDb, -7.5, 1e-12, 'crash peak at the default sea');
   assert.deepEqual(calm.wash, { hpFrom: 1800, hpTo: 350, Tw: 3, peakDb: -10 });
   assert.deepEqual(wild.wash, { hpFrom: 1800, hpTo: 350, Tw: 6, peakDb: -4 });
   assert.deepEqual(calm.pan, [-0.35, 0.35]);
-  assert.deepEqual(calm.surfLfo, { hz: 0.04, depthDb: 2 });
+  assert.deepEqual(calm.surfSway, { depthDb: 3 });
+  assert.equal(calm.surfLfo, undefined, 'the 0.04 Hz LFO is gone');
   near(oceanParams(1.5).periodRange[0], MIN_WAVE_PERIOD, 1e-12, 'period floor');
   assert.ok(oceanParams(0.9).periodRange[0] >= MIN_WAVE_PERIOD);
 });
@@ -68,7 +71,7 @@ test('gains never exceed their peakDb and the sweeps run between the recipe freq
   const rng = mulberry32(8);
   for (const i of INTENSITIES) {
     const params = oceanParams(i);
-    const { events } = planWave(rng, 0, params);
+    const { events } = planWave(rng, 0, params, { set: 1 });
     const of = (param) => events.filter((e) => e.param === param);
     const peaks = { swellGain: params.swell.peakDb, crashGain: params.crash.peakDb, washGain: params.wash.peakDb };
     for (const [param, db] of Object.entries(peaks)) {
@@ -88,8 +91,8 @@ test('gains never exceed their peakDb and the sweeps run between the recipe freq
     near(crash[2].timeConstant, params.crash.release, 1e-12, 'crash release');
     const wash = of('washGain');
     near(wash[1].at - wash[0].at, 0.5, 1e-9, 'wash attack');
-    near(wash[2].timeConstant, params.wash.Tw / 3, 1e-12, 'wash release');
-    near(of('washHP')[1].at - of('washHP')[0].at, params.wash.Tw, 1e-9, 'wash sweep lasts Tw');
+    near(wash[2].timeConstant, (params.wash.Tw * 1.15) / 3, 1e-12, 'wash release');
+    near(of('washHP')[1].at - of('washHP')[0].at, params.wash.Tw * 1.15, 1e-9, 'wash sweep lasts Tw, 15 % longer at the top of a set');
   }
 });
 
@@ -131,4 +134,37 @@ test('planWave is deterministic for a seed and never mutates params', () => {
   const a = planWave(mulberry32(99), 3, params);
   const b = planWave(mulberry32(99), 3, params);
   assert.deepEqual(a, b);
+});
+
+test('sets: the top of a set (E = 1) peaks at the recipe, a lull (E = 0) 5.19 dB lower, the default E = 0.5 in between', () => {
+  const peaks = (set) => {
+    const { events } = planWave(mulberry32(4), 10, oceanParams(0.25), set === undefined ? undefined : { set });
+    return ['swellGain', 'crashGain', 'washGain'].map((param) => Math.max(...events.filter((e) => e.param === param).map((e) => e.value)));
+  };
+  const params = oceanParams(0.25);
+  const recipe = [params.swell.peakDb, params.crash.peakDb, params.wash.peakDb].map(dbToGain);
+  peaks(1).forEach((peak, k) => near(peak, recipe[k], 1e-12, `peak ${k} at E = 1`));
+  peaks(0).forEach((peak, k) => near(20 * Math.log10(peak / recipe[k]), -5.19, 0.01, `peak ${k} at E = 0`));
+  peaks(undefined).forEach((peak, k) => near(20 * Math.log10(peak / recipe[k]), 20 * Math.log10(0.775), 1e-9, `peak ${k} by default`));
+  for (let E = 0; E <= 1; E += 0.05) {
+    const { events } = planWave(mulberry32(9), 0, params, { set: E });
+    for (const e of events.filter((ev) => ev.param.endsWith('Gain'))) assert.ok(e.value <= dbToGain(params[e.param.replace('Gain', '')].peakDb) + 1e-12, 'never above the recipe');
+  }
+});
+
+test('sets scale the period (never below 6 s), the swell and the wash, and report their energy as visual.strength', () => {
+  const params = oceanParams(1);
+  for (const [set, scale] of [[0, 1.15], [0.5, 1], [1, 0.85]]) {
+    const base = planWave(mulberry32(12), 0, params, { set: 0.5 });
+    const wave = planWave(mulberry32(12), 0, params, { set });
+    assert.equal(wave.visual.strength, set);
+    assert.ok(wave.nextStart >= MIN_WAVE_PERIOD, `period ${wave.nextStart}`);
+    near(wave.nextStart, Math.max(MIN_WAVE_PERIOD, base.nextStart * scale), 1e-9, `period at E = ${set}`);
+  }
+  const lull = planWave(mulberry32(3), 0, params, { set: 0 });
+  const crest = planWave(mulberry32(3), 0, params, { set: 1 });
+  near((crest.visual.at + 0.2) / (lull.visual.at + 0.2), 1.1 / 0.9, 1e-9, 'swell length 0.9× → 1.1×');
+  near(crest.visual.duration / lull.visual.duration, 1.15 / 0.85, 1e-9, 'wash length 0.85× → 1.15×');
+  assert.equal(planWave(mulberry32(3), 0, params).visual.strength, 0.5, 'default set energy');
+  assert.deepEqual(planWave(mulberry32(77), 5, params), planWave(mulberry32(77), 5, params, { set: 0.5 }), 'default is E = 0.5, deterministic');
 });

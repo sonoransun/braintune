@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STRINGS,
+  JUST_STOPS,
   statusLine,
   fill,
   formatHz,
@@ -11,6 +12,8 @@ import {
   formatMinutes,
   limitationsCopy,
 } from '../docs/js/core/microcopy.js';
+import { UI_CARRIER } from '../docs/js/core/entrainment.js';
+import { TIMBRE_ORDER } from '../docs/js/core/timbres.js';
 
 const STATES = ['idle', 'starting', 'playing', 'pausing', 'paused', 'ending', 'ended', 'ambient', 'blocked', 'interrupted', 'unavailable'];
 const CTX = { presetName: 'Calm', beatHz: 10, band: 'alpha' };
@@ -121,6 +124,28 @@ test('statusLine follows the §7.4 table', () => {
   assert.equal(statusLine('idle', { presetName: 'Calm' }).status, 'Calm');
 });
 
+test('statusLine during a beat glide: "Sleep · easing 6 → 2 Hz" while active, and the start announcement names where the glide begins', () => {
+  const sleep = { presetName: 'Sleep', beatHz: 2, band: 'delta' };
+  const glide = { fromHz: 6, toHz: 2, active: true };
+  assert.equal(statusLine('playing', { ...sleep, glide }).status, 'Sleep · easing 6 → 2 Hz');
+  assert.equal(statusLine('starting', { ...sleep, glide }).status, 'Sleep · easing 6 → 2 Hz');
+  assert.equal(statusLine('starting', { ...sleep, glide }).announce, 'Playing Sleep, 6 hertz, delta.');
+  assert.equal(statusLine('ending', { ...sleep, glide }).status, 'Sleep · easing 6 → 2 Hz');
+  const done = { ...glide, active: false };
+  assert.equal(statusLine('playing', { ...sleep, glide: done }).status, 'Sleep · 2 Hz');
+  assert.equal(statusLine('starting', { ...sleep, glide: done }).announce, 'Playing Sleep, 2 hertz, delta.');
+  assert.equal(statusLine('playing', { presetName: 'Deep sleep', beatHz: 1, glide: { fromHz: 3, toHz: 1, active: true } }).status, 'Deep sleep · easing 3 → 1 Hz');
+  assert.equal(statusLine('playing', { presetName: 'Odd', beatHz: 4, glide: { fromHz: 7.25, toHz: 3.5, active: true } }).status, 'Odd · easing 7.3 → 3.5 Hz');
+  assert.equal(statusLine('playing', { ...sleep, glide: { fromHz: Number.NaN, toHz: 2, active: true } }).status, 'Sleep · 2 Hz', 'an incomplete glide is ignored');
+  assert.equal(statusLine('ambient', { ...sleep, glide }).status, 'Rain and sea', 'states with their own status keep it');
+  assert.equal(statusLine('ended', { ...sleep, glide }).status, 'Session complete');
+  for (const state of STATES) {
+    for (const s of Object.values(statusLine(state, { ...sleep, glide }))) {
+      if (typeof s === 'string') assert.ok(!s.includes('!') && !/\berror\b/i.test(s), `${state}: ${s}`);
+    }
+  }
+});
+
 test('formatHz trims trailing zeros and keeps at most one decimal', () => {
   assert.equal(formatHz(7.5), '7.5 Hz');
   assert.equal(formatHz(10), '10 Hz');
@@ -131,9 +156,30 @@ test('formatHz trims trailing zeros and keeps at most one decimal', () => {
   assert.equal(formatHz(NaN), '—');
 });
 
-test('formatPitch names the nearest equal-tempered note', () => {
+test('JUST_STOPS: 17 frozen [hz, name] pairs from C3 to G5 over A = 110 Hz, covering the pitch slider', () => {
+  assert.equal(JUST_STOPS.length, 17);
+  assert.ok(Object.isFrozen(JUST_STOPS) && JUST_STOPS.every(Object.isFrozen));
+  assert.deepEqual(JUST_STOPS.map(([, name]) => name), [
+    'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'C5', 'D5', 'E5', 'F5', 'G5',
+  ]);
+  const ratios = { C: 6 / 5, D: 4 / 3, E: 3 / 2, F: 8 / 5, G: 9 / 5, A: 2 };
+  for (const [hz, name] of JUST_STOPS) {
+    const octave = Number(name.slice(1)) - 3;
+    assert.ok(Math.abs(hz - 110 * 2 ** octave * ratios[name[0]]) < 1e-9, `${name} = ${hz}`);
+  }
+  for (let i = 1; i < JUST_STOPS.length; i++) assert.ok(JUST_STOPS[i][0] > JUST_STOPS[i - 1][0], 'ascending');
+  for (const [hz, name] of JUST_STOPS) assert.ok(hz >= UI_CARRIER[0] && hz <= UI_CARRIER[1], `${name} is out of the pitch slider's reach`);
+});
+
+test('formatPitch names a just stop within 3 cents, otherwise the nearest equal-tempered note', () => {
+  assert.equal(formatPitch(264), '264 Hz · C4');
   assert.equal(formatPitch(440), '440 Hz · A4');
   assert.equal(formatPitch(256), '256 Hz · near C4');
+  assert.equal(formatPitch(287), '287 Hz · near D4');
+  assert.equal(formatPitch(198), '198 Hz · G3');
+  assert.equal(formatPitch(396), '396 Hz · G4', 'a just G4 sits 17.6 cents above the tempered one and is still named');
+  assert.equal(formatPitch(880 / 3), '293.3 Hz · D4');
+  assert.equal(formatPitch(110), '110 Hz · A2');
   assert.equal(formatPitch(523.25), '523.3 Hz · C5');
   assert.equal(formatPitch(261.63), '261.6 Hz · C4');
   assert.equal(formatPitch(220), '220 Hz · A3');
@@ -142,6 +188,48 @@ test('formatPitch names the nearest equal-tempered note', () => {
   assert.equal(formatPitch(450), '450 Hz · near A4');
   assert.equal(formatPitch(120), '120 Hz · near B2');
   assert.equal(formatPitch(0), '—');
+});
+
+test('the 0.4 copy is present word for word (spec §5.2 and §0)', () => {
+  assert.equal(STRINGS.player.autoplayOverlay, 'Tap anywhere to begin {preset}');
+  assert.equal(fill(STRINGS.player.autoplayContinue, { preset: 'Sleep', time: '12:00' }), 'Tap anywhere to continue Sleep · 12:00 left');
+  assert.equal(STRINGS.player.restartSound, 'Restart sound');
+  assert.equal(STRINGS.settings.autoplay.description, 'Begins your last preset as soon as Brain Tune opens. Some browsers wait for a tap first.');
+  assert.equal(STRINGS.settings.nightDim.description, 'In Sleep, Deep sleep and Rest the screen dims after a minute of stillness and settles further after five.');
+  assert.deepEqual({ ...STRINGS.settings.more }, { label: 'More settings' });
+  assert.equal(STRINGS.settings.addToHome.generic, "Use your browser's Add to Home Screen or Install option");
+  assert.equal(STRINGS.settings.addToHome.apple, 'In Safari: Share, then Add to Home Screen.');
+  assert.equal(STRINGS.mixer.purrNote, 'A low purr near 26 Hz, there for comfort. It plays no part in the beat.');
+  assert.equal(STRINGS.about.purr, undefined, 'About uses mixer.purrNote');
+  assert.equal(STRINGS.firstRun.helpQuestion, 'What would help right now?');
+  assert.deepEqual({ ...STRINGS.firstRun.help }, { sleep: 'Drift off', calm: 'Settle', focus: 'Focus' });
+  assert.equal(STRINGS.firstRun.quietNote, "Sound begins quietly when you tap Let's begin and fades in over a few seconds.");
+  assert.deepEqual({ ...STRINGS.fineTuning.timbres }, { sine: 'Sine', velvet: 'Velvet', warm: 'Warm', amber: 'Amber', glass: 'Glass', bell: 'Bell' });
+  assert.deepEqual(Object.keys(STRINGS.fineTuning.timbres), [...TIMBRE_ORDER], 'one name per timbre, in display order');
+  assert.equal(
+    STRINGS.fineTuning.explainer.timbre,
+    'Timbre is the colour of the tone. Sine is plain, Velvet and Warm are rounder, Amber is octave-rich, Glass and Bell are sparse and clear.',
+  );
+  assert.equal(
+    STRINGS.fineTuning.explainer.pad,
+    'Pad adds a quiet octave and fifth above the tone and a sub below it, all in pure ratios. At low pitches the fifth sits an octave higher, and the voices enter one at a time over the first minute.',
+  );
+  assert.deepEqual({ ...STRINGS.fineTuning.padStyle }, { label: 'Pad style', auto: 'Auto', drone: 'Drone', canon: 'Canon' });
+  assert.equal(
+    STRINGS.fineTuning.explainer.padStyle,
+    'Drone holds the harmony and lets it breathe. Canon adds two slow voices, one answering the other a few notes later, as in a round. Auto uses Canon in Meditate and Calm.',
+  );
+  assert.equal(fill(STRINGS.status.glide, { preset: 'Sleep', from: 6, to: formatHz(2) }), 'Sleep · easing 6 → 2 Hz');
+  assert.equal(fill(STRINGS.cats.label, { coat: STRINGS.cats.coats.tuxedo, pose: STRINGS.cats.poses.peek }), 'A tuxedo cat peeking in');
+  assert.equal(
+    STRINGS.about.tuning,
+    'Pitch, pad and chime are tuned in simple whole-number ratios, which sound smooth because their overtones line up. No particular key or frequency is special on its own.',
+  );
+  assert.equal(
+    STRINGS.about.canon,
+    "In Canon the pad's two slow voices follow simple rules of counterpoint: the second voice imitates the first, sometimes upside down, slower or sooner, and every pair of notes heard together forms a consonant interval.",
+  );
+  assert.equal(STRINGS.status.playing.speakers, 'Playing out loud.', 'kept as it was');
 });
 
 test('formatPercent, formatTimeLeft and formatMinutes', () => {

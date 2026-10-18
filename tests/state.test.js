@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STORAGE_KEY, SETTINGS_VERSION, DEFAULT_SETTINGS, migrate, serialize, parse, createStore } from '../docs/js/core/state.js';
+import { STORAGE_KEY, SETTINGS_VERSION, DEFAULT_SETTINGS, migrate, serialize, parse, createStore, startPlan } from '../docs/js/core/state.js';
+import { getPreset } from '../docs/js/core/presets.js';
 import { createFakeStorage, throwingStorage } from './helpers/fake-storage.js';
 
 function fakeTimers() {
@@ -25,12 +26,18 @@ function fakeTimers() {
 
 test('defaults match the plan and are deep-frozen', () => {
   assert.equal(STORAGE_KEY, 'braintune:settings:v1');
-  assert.equal(SETTINGS_VERSION, 3);
-  assert.equal(DEFAULT_SETTINGS.v, 3);
+  assert.equal(SETTINGS_VERSION, 4);
+  assert.equal(DEFAULT_SETTINGS.v, 4);
   assert.equal(DEFAULT_SETTINGS.autoplay, true);
   assert.equal(DEFAULT_SETTINGS.listening, 'speakers');
   assert.equal(DEFAULT_SETTINGS.presetId, 'sleep');
-  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.45, tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 });
+  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.45, tone: 0.35, rain: 0.7, ocean: 0.65, purr: 0.5 });
+  assert.equal(DEFAULT_SETTINGS.rainIntensity, 0.35);
+  assert.equal(DEFAULT_SETTINGS.oceanIntensity, 0.25);
+  assert.equal(DEFAULT_SETTINGS.padStyle, 'auto');
+  const sleep = getPreset('sleep');
+  assert.deepEqual(DEFAULT_SETTINGS.mix, { master: 0.45, ...sleep.mix }, 'the default layer mix is Sleep\'s');
+  assert.deepEqual([DEFAULT_SETTINGS.rainIntensity, DEFAULT_SETTINGS.oceanIntensity], [sleep.rainIntensity, sleep.oceanIntensity]);
   assert.deepEqual(DEFAULT_SETTINGS.timer, { byPreset: {}, after: 'stop' });
   assert.equal(DEFAULT_SETTINGS.theme, 'dark');
   assert.equal(DEFAULT_SETTINGS.keepAwake, false);
@@ -88,14 +95,16 @@ test('0..1 numbers are clamped, counters floored, bad types replaced', () => {
   assert.equal(out.mix.rain, DEFAULT_SETTINGS.mix.rain);
   assert.equal(out.mix.purr, 0.3);
   assert.equal(out.rainIntensity, 1);
-  assert.equal(out.oceanIntensity, 0.35);
+  assert.equal(out.oceanIntensity, DEFAULT_SETTINGS.oceanIntensity);
   assert.equal(out.cats.spotted, 3);
   assert.equal(migrate({ cats: { spotted: -4 } }).cats.spotted, 0);
   assert.equal(out.haptics, true);
 });
 
 test('enums fall back to defaults when invalid', () => {
-  const out = migrate({ listening: 'earbuds', theme: 'sepia', motion: 'wild', scene: 'half', timer: { after: 'loop' }, custom: { mode: 'quad' } });
+  const out = migrate({ listening: 'earbuds', theme: 'sepia', motion: 'wild', scene: 'half', timer: { after: 'loop' }, custom: { mode: 'quad' }, padStyle: 'fugue' });
+  assert.equal(out.padStyle, 'auto');
+  for (const padStyle of ['auto', 'drone', 'canon']) assert.equal(migrate({ padStyle }).padStyle, padStyle);
   assert.equal(out.listening, 'speakers');
   assert.equal(out.theme, 'dark');
   assert.equal(out.motion, 'auto');
@@ -250,29 +259,107 @@ test('a custom key is honoured', () => {
   assert.equal(storage.getItem(STORAGE_KEY), null);
 });
 
-test('a v1 store keeps personal choices and takes the v2 defaults once (Sleep, purr and rain on, quiet, ∞ timer)', () => {
+test('a v1 store keeps personal choices and lands on the current defaults once (Sleep, purr and rain on, quiet, ∞ timer)', () => {
   const v1 = {
     v: 1, firstRunDone: true, listening: 'headphones', presetId: 'focus', theme: 'light', cats: { enabled: true, spotted: 7 },
     mix: { master: 0.9, tone: 0.55, rain: 0, ocean: 0.55, purr: 0 }, timer: { byPreset: { focus: 45 }, after: 'ambient' },
   };
   const out = migrate(v1);
-  assert.equal(out.v, 3);
+  assert.equal(out.v, 4);
   assert.deepEqual([out.firstRunDone, out.listening, out.theme, out.cats.spotted], [true, 'headphones', 'light', 7]);
   assert.equal(out.presetId, 'sleep');
   assert.deepEqual(out.mix, DEFAULT_SETTINGS.mix);
   assert.deepEqual(out.timer, { byPreset: {}, after: 'stop' });
   const again = migrate(JSON.parse(JSON.stringify(out)));
-  assert.deepEqual(again, out, 'a v2 store is not reset again');
+  assert.deepEqual(again, out, 'a current store is not reset again');
   assert.equal(migrate({ mix: { master: 0.3 } }).mix.master, 0.3, 'unversioned input is validated, not reset');
 });
 
-test('a v2 store also moves to the v3 defaults once (quieter tone, moderate purr, Play on open)', () => {
-  const v2 = { v: 2, firstRunDone: true, presetId: 'calm', autoplay: false, mix: { master: 0.45, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 } };
+test('a v2 store also lands on the current defaults once (quieter tone, moderate purr, Play on open)', () => {
+  const v2 = { v: 2, firstRunDone: true, presetId: 'calm', autoplay: false, mix: { master: 0.7, tone: 0.5, rain: 0.6, ocean: 0.55, purr: 0.55 }, timer: { byPreset: { calm: 30 }, after: 'stop' } };
   const out = migrate(v2);
-  assert.equal(out.v, 3);
+  assert.equal(out.v, 4);
   assert.equal(out.firstRunDone, true);
   assert.equal(out.presetId, 'sleep');
   assert.equal(out.autoplay, true);
-  assert.deepEqual(out.mix, DEFAULT_SETTINGS.mix);
-  assert.equal(migrate({ ...out, autoplay: false }).autoplay, false, 'a v3 choice to turn autoplay off sticks');
+  assert.deepEqual(out.mix, DEFAULT_SETTINGS.mix, 'not even the master volume survives from v2');
+  assert.deepEqual(out.timer, DEFAULT_SETTINGS.timer);
+  assert.equal(out.oceanIntensity, DEFAULT_SETTINGS.oceanIntensity);
+  assert.equal(migrate({ ...out, autoplay: false }).autoplay, false, 'a current choice to turn autoplay off sticks');
+});
+
+/** A v3 store as 0.3 wrote it after a few choices: Sleep's stock mix at a raised volume, Play on open off, a custom pitch. */
+const V3_SLEEP = Object.freeze({
+  v: 3, firstRunDone: true, listening: 'headphones', presetId: 'sleep',
+  custom: { beatHz: 2, carrierHz: 220, timbre: 'velvet', pad: true, mode: 'auto' },
+  mix: { master: 0.7, tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 },
+  muted: { tone: false, rain: true, ocean: false, purr: false },
+  rainIntensity: 0.35, oceanIntensity: 0.35,
+  timer: { byPreset: { sleep: 720, focus: 45 }, after: 'ambient' },
+  theme: 'light', motion: 'auto', scene: 'full', cats: { enabled: true, spotted: 12 }, haptics: false, shortcuts: true,
+  keepAwake: true, nightDim: false, autoplay: false,
+  session: { presetId: 'sleep', endsAt: null, pausedRemainingMs: 90_000 },
+  hints: { orb: false, sheet: false, stereoCheckDone: true },
+});
+
+test('a v3 store at master 0.7 on Sleep with the stock mix keeps 0.7, its preset, timers, Play on open off and custom, and takes Sleep\'s new layer mix and sea .25', () => {
+  const out = migrate(JSON.parse(JSON.stringify(V3_SLEEP)));
+  const sleep = getPreset('sleep');
+  assert.equal(out.v, 4);
+  assert.deepEqual(out.mix, { master: 0.7, ...sleep.mix });
+  assert.deepEqual(out.mix, { master: 0.7, tone: 0.35, rain: 0.7, ocean: 0.65, purr: 0.5 });
+  assert.equal(out.oceanIntensity, 0.25);
+  assert.equal(out.rainIntensity, 0.35);
+  assert.equal(out.presetId, 'sleep');
+  assert.deepEqual(out.timer, { byPreset: { sleep: 720, focus: 45 }, after: 'ambient' });
+  assert.equal(out.autoplay, false);
+  assert.deepEqual(out.custom, V3_SLEEP.custom);
+  assert.deepEqual(out.session, V3_SLEEP.session, 'a paused session can still be resumed');
+  assert.deepEqual(out.muted, V3_SLEEP.muted);
+  assert.equal(out.padStyle, 'auto');
+  for (const key of ['firstRunDone', 'listening', 'theme', 'haptics', 'keepAwake', 'nightDim']) assert.equal(out[key], V3_SLEEP[key], key);
+  assert.deepEqual([out.cats, out.hints], [V3_SLEEP.cats, V3_SLEEP.hints]);
+  assert.deepEqual(migrate(JSON.parse(JSON.stringify(out))), out, 'a v4 store is not reset again');
+});
+
+test('a v3 store with a hand-set mix keeps it, with its sea and rain; a stock Sleep mix keeps a hand-set sea', () => {
+  const handSet = { ...V3_SLEEP, mix: { master: 0.3, tone: 0.2, rain: 0.6, ocean: 0.55, purr: 0.45 }, rainIntensity: 0.8, oceanIntensity: 0.35 };
+  const out = migrate(handSet);
+  assert.deepEqual(out.mix, handSet.mix);
+  assert.deepEqual([out.rainIntensity, out.oceanIntensity], [0.8, 0.35]);
+  const calm = migrate({ ...V3_SLEEP, presetId: 'calm', mix: { master: 0.45, ...getPreset('calm').mix }, rainIntensity: 0.45, oceanIntensity: 0.35 });
+  assert.deepEqual(calm.mix, { master: 0.45, ...getPreset('calm').mix }, 'presets whose mix did not change keep theirs');
+  assert.deepEqual([calm.presetId, calm.rainIntensity, calm.oceanIntensity], ['calm', 0.45, 0.35]);
+  assert.equal(migrate({ ...V3_SLEEP, oceanIntensity: 0.6 }).oceanIntensity, 0.6, 'only the stock sea moves');
+  const missing = migrate({ v: 3, presetId: 'sleep' });
+  assert.deepEqual(missing.mix, DEFAULT_SETTINGS.mix, 'a v3 store without a mix takes the defaults');
+});
+
+test('a v3 store on Deep sleep with its stock mix takes Deep sleep\'s new mix; other stored values are validated', () => {
+  const deep = getPreset('deep');
+  const out = migrate({ v: 3, presetId: 'deep', mix: { master: 0.5, tone: 0.3, rain: 0.65, ocean: 0.6, purr: 0.45 }, rainIntensity: 0.25, oceanIntensity: 0.25 });
+  assert.deepEqual(out.mix, { master: 0.5, ...deep.mix });
+  assert.deepEqual([out.presetId, out.rainIntensity, out.oceanIntensity], ['deep', 0.25, 0.25]);
+  assert.equal(migrate({ v: 3, presetId: 'deep', mix: { master: 'loud', tone: 0.3, rain: 0.65, ocean: 0.6, purr: 0.45 } }).mix.master, DEFAULT_SETTINGS.mix.master);
+  assert.equal(migrate({ v: 3, presetId: 'constructor', mix: { master: 0.5 } }).presetId, 'constructor', 'an odd preset id is kept for the UI to resolve');
+  assert.equal(migrate({ v: 3, custom: { ...V3_SLEEP.custom, timbre: 'amber' } }).custom.timbre, 'amber');
+  assert.equal(migrate({ v: 3, custom: { ...V3_SLEEP.custom, timbre: 'brass' } }).custom.timbre, 'velvet');
+  assert.equal(migrate({ v: 3, padStyle: 'canon' }).padStyle, 'canon');
+  assert.equal(migrate({ v: 2, padStyle: 'drone' }).padStyle, 'drone', 'the pad style is a personal choice kept from any version');
+});
+
+test('startPlan: a stored session with more than a minute left resumes, anything else starts the current preset afresh', () => {
+  const NOW = 1_700_000_000_000;
+  const at = (session, extra = {}) => startPlan(migrate({ presetId: 'calm', ...extra, session }), NOW);
+  assert.deepEqual(at(null), { kind: 'fresh', presetId: 'calm' }, 'no session');
+  assert.deepEqual(startPlan(migrate(undefined), NOW), { kind: 'fresh', presetId: 'sleep' }, 'defaults start Sleep');
+  assert.deepEqual(at({ presetId: 'rest', pausedRemainingMs: 90_000 }), { kind: 'resume', presetId: 'rest', remainingMs: 90_000 }, 'paused with 90 s left');
+  assert.deepEqual(at({ presetId: 'rest', pausedRemainingMs: 30_000 }), { kind: 'fresh', presetId: 'calm' }, 'paused with 30 s left');
+  assert.deepEqual(at({ presetId: 'rest', pausedRemainingMs: 60_000 }).kind, 'fresh', 'exactly a minute is not more than a minute');
+  assert.deepEqual(at({ presetId: 'sleep', endsAt: NOW + 12 * 60_000 }), { kind: 'resume', presetId: 'sleep', remainingMs: 12 * 60_000 }, 'running, ending in the future');
+  assert.deepEqual(at({ presetId: 'sleep', endsAt: NOW + 30_000 }), { kind: 'fresh', presetId: 'calm' }, 'running, 30 s left');
+  assert.deepEqual(at({ presetId: 'sleep', endsAt: NOW - 5_000 }), { kind: 'fresh', presetId: 'calm' }, 'running, already over');
+  assert.equal(at({ presetId: 'sleep', endsAt: NOW + 3_600_000, pausedRemainingMs: 120_000 }).remainingMs, 120_000, 'a paused remainder wins over endsAt');
+  assert.deepEqual(startPlan({ presetId: 'focus', session: null }, Number.NaN), { kind: 'fresh', presetId: 'focus' });
+  assert.equal(startPlan({ session: { presetId: 'sleep', endsAt: NOW + 120_000, pausedRemainingMs: null } }, Number.NaN).kind, 'fresh', 'an unknown clock never resumes');
 });

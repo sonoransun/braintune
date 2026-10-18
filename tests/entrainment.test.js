@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BANDS, BEAT_RANGE, CARRIER_RANGE, UI_CARRIER,
-  bandOf, clampBeat, recommendMode, recommendCarrier, voiceFrequencies, partialBeatTable,
+  bandOf, clampBeat, recommendMode, recommendCarrier, voiceFrequencies, partialBeatTable, padBeatTable,
 } from '../docs/js/core/entrainment.js';
 import { TIMBRES } from '../docs/js/core/timbres.js';
+import { voicingFor, canonVoicingFor } from '../docs/js/core/voicing.js';
 import { mulberry32, randRange } from '../docs/js/core/rng.js';
 
 const near = (actual, expected, tol, what = 'value') =>
@@ -106,4 +107,30 @@ test('partialBeatTable skips silent partials and both limits cut perception', ()
   assert.deepEqual(partialBeatTable(256, 12, TIMBRES.velvet).filter((r) => r.perceptible).map((r) => r.n), [1, 2], '36 Hz is past the beat limit');
   assert.deepEqual(partialBeatTable(600, 10, TIMBRES.velvet).filter((r) => r.perceptible).map((r) => r.n), [1], '1200 Hz is past the partial limit');
   assert.deepEqual(partialBeatTable(256, 10, []), []);
+});
+
+test('partialBeatTable(264, 6, amber): partials 1-3 would beat perceptibly on binaural voices, the rest are past the limits', () => {
+  const rows = partialBeatTable(264, 6, TIMBRES.amber);
+  assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4, 5, 6, 8], 'the seventh partial is silent');
+  assert.deepEqual(rows.filter((r) => r.perceptible).map((r) => r.n), [1, 2, 3]);
+});
+
+test('padBeatTable(264, 6, voicingFor(264)): the sounding slots as p/q with second-order beats p·Δ/2, none at the carrier', () => {
+  const rows = padBeatTable(264, 6, voicingFor(264));
+  assert.deepEqual(rows.map((r) => [r.name, r.ratio, r.p, r.q, r.componentHz, r.secondOrderHz]), [
+    ['sub', 0.5, 1, 2, 132, 3],
+    ['fifth', 1.5, 3, 2, 396, 9],
+    ['octave', 2, 2, 1, 528, 6],
+    ['twelfth', 3, 3, 1, 792, 9],
+  ]);
+  assert.ok(rows.every((r) => r.atCarrier === false));
+  const low = padBeatTable(110, 1, voicingFor(110));
+  assert.deepEqual(low.map((r) => [r.name, r.secondOrderHz]), [['sub', 0.5], ['octave', 1], ['twelfth', 1.5], ['double', 2]], 'Deep sleep: Δ/2, Δ, 1.5Δ, 2Δ');
+  assert.deepEqual(padBeatTable(264, 6, canonVoicingFor(264)).map((r) => r.name), ['sub', 'octave'], 'canon: the static pad keeps sub and octave');
+  for (const hz of [110, 198, 264, 440]) {
+    for (const row of padBeatTable(hz, 6, voicingFor(hz))) {
+      near(row.p / row.q, row.ratio, 1e-12, `${row.name} as a fraction`);
+      assert.ok(row.secondOrderHz <= 2 * 6, `${row.name} beats at ${row.secondOrderHz} Hz`);
+    }
+  }
 });

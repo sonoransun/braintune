@@ -1,6 +1,6 @@
-// The orb (plan §7.5, §7.9): state-driven halos, a progress ring, breathing at 10.9 s (Web Animations), a 3 s bloom
-// and a tap ripple capped at three per second. Nothing here derives from the sound; inputs are state, labels and
-// the timer fraction only.
+// The orb (plan §7.5, §7.9, v0.4 §V9): state-driven halos, a progress ring, breathing at 10.9 s (Web Animations), a 3 s
+// bloom and a tap ripple capped at three per second. Nothing here derives from the sound; inputs are state, labels, the
+// timer fraction and flags, and the length of a session's entrance.
 
 const BREATH_MS = 10900;
 const BREATH_EASING = 'cubic-bezier(0.37, 0, 0.63, 1)';
@@ -66,15 +66,42 @@ export function createOrb(el, { onToggle, still = false, now = () => performance
     );
   }
 
+  /** Stretches a halo rise already under way (the state flips before the entrance length is known). */
+  function stretchHaloRise(ms) {
+    for (const halo of halos) {
+      for (const animation of halo.getAnimations?.() ?? []) {
+        if (animation.transitionProperty === 'opacity') animation.effect?.updateTiming({ duration: ms });
+      }
+    }
+  }
+
   el.addEventListener('click', onClick);
   startBreathing();
 
   return {
-    /** Engine state name → data-state (halo opacities and core tint come from CSS). */
+    /** Engine state name → data-state (halo opacities and core tint from CSS); any state but idle or starting ends an entrance. */
     setState(state) {
       el.dataset.state = state;
+      if (state !== 'starting' && state !== 'idle') el.style.removeProperty('--t-entrance');
     },
-    /** Timer progress 0–1 → the 2 px ring. */
+    /** A timer is armed → data-timer (a brighter ring track). */
+    setTimerArmed(on) {
+      el.dataset.timer = String(Boolean(on));
+    },
+    /** Waiting for the tap that starts an autoplay session → data-waiting (halos at the playing values). */
+    setWaiting(on) {
+      el.dataset.waiting = String(Boolean(on));
+    },
+    /** One-shot: the halos rise over ms while a session enters (--t-entrance, cleared once it has played). */
+    setEntrance(ms) {
+      if (!(Number.isFinite(ms) && ms > 0)) {
+        el.style.removeProperty('--t-entrance');
+        return;
+      }
+      el.style.setProperty('--t-entrance', `${Math.round(ms)}ms`);
+      if (el.dataset.state === 'starting') stretchHaloRise(Math.round(ms));
+    },
+    /** Timer progress 0–1 → the ring fill. */
     setProgress(fraction) {
       el.style.setProperty('--progress', String(clamp01(fraction)));
     },

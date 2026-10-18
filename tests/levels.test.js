@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {
   MASTER_MAX, VOICE_PEAK, PAD_DB, CEILING_DB, LIMITER,
   dbToGain, gainToDb, layerGain, masterGain, compressorMakeupGain, ceilingGain, carrierTrim,
-  fadeBreakpoints, equalPower, bedGainDb, limiterOutputDb, levelBudget,
+  fadeBreakpoints, equalPower, bedGainDb, crashPeakDb, limiterOutputDb, levelBudget,
 } from '../docs/js/core/levels.js';
-import { PRESETS, resolvePreset } from '../docs/js/core/presets.js';
+import { PRESETS, getPreset, resolvePreset } from '../docs/js/core/presets.js';
+import { padGainSum } from '../docs/js/core/voicing.js';
 
 const near = (actual, expected, tol, what = 'value') =>
   assert.ok(Math.abs(actual - expected) <= tol, `${what} ${actual} is not within ${tol} of ${expected}`);
@@ -18,7 +19,7 @@ const DEFAULT_MASTER = DEFAULT_SETTINGS.mix.master;
 const LISTENINGS = ['headphones', 'speakers'];
 const DEVICES = ['phone', 'desktop'];
 
-/** Budget of a preset as the engine would run it: the timbre only matters on the isochronic carrier. */
+/** Budget of a preset as the engine would run it, pad included when the preset has one: the timbre only matters on the isochronic carrier. */
 function budgetFor(preset, listening, device, overrides = {}) {
   const r = resolvePreset(preset, { listening, device });
   return levelBudget({
@@ -27,8 +28,14 @@ function budgetFor(preset, listening, device, overrides = {}) {
     rainIntensity: r.rainIntensity,
     oceanIntensity: r.oceanIntensity,
     timbre: r.mode === 'isochronic' ? r.timbre : 'sine',
+    pad: r.pad,
     ...overrides,
   });
+}
+
+/** Every preset in every listening setup. */
+function* setups() {
+  for (const preset of PRESETS) for (const listening of LISTENINGS) for (const device of DEVICES) yield [preset, listening, device, `${preset.id} / ${listening} / ${device}`];
 }
 
 test('constants match the plan', () => {
@@ -122,6 +129,13 @@ test('equal-power pairs satisfy a² + b² = 1, as curves and as breakpoints', ()
   for (let i = 0; i <= 16; i++) near(fadeIn[i] ** 2 + fadeOut[i] ** 2, 1, 1e-6, `breakpoint ${i}`);
 });
 
+test('crashPeakDb: -10 + 10i, so a calm sea crashes 4 dB softer than in 0.3 and a heavy one as loud', () => {
+  assert.equal(crashPeakDb(0), -10);
+  assert.equal(crashPeakDb(1), 0);
+  near(crashPeakDb(0.35), -6.5, 1e-12);
+  near(crashPeakDb(0.25), -7.5, 1e-12);
+});
+
 test('bedGainDb: rain -14 + 14s, rumble -36 + 20s², surf -14 + 6i', () => {
   assert.equal(bedGainDb('rain', 0), -14);
   assert.equal(bedGainDb('rain', 1), 0);
@@ -158,7 +172,7 @@ test('levelBudget reproduces the §6.6 table for Calm and Cat nap', () => {
   near(calm.toneDbfsPeak, -22.6, 0.5, 'tone peak');
   near(calm.rainDbfsRms, -32.9, 0.1, 'rain RMS');
   near(calm.oceanBedDbfsRms, -43.6, 0.1, 'ocean bed RMS');
-  near(calm.oceanCrestDbfsPeak, -25, 1, 'ocean crest');
+  near(calm.oceanCrestDbfsPeak, -28.1, 0.5, 'ocean crest (crash -10 + 10i)');
   assert.equal(calm.purrDbfsRms, -Infinity);
   assert.ok(calm.sumPeakDbfs <= -12);
   const catnap = levelBudget({
@@ -188,38 +202,68 @@ test('levelBudget: muted or missing layers add nothing, missing master is full, 
   assert.ok(glass.sumPeakDbfs < sine.sumPeakDbfs, 'glass has a lower crest than a sine');
 });
 
-test('every preset at its quiet v2 defaults sits inside the windows (§6.6 shifted −8 dB) on headphones and speakers, phone and desktop', () => {
-  for (const preset of PRESETS) {
-    for (const listening of LISTENINGS) {
-      for (const device of DEVICES) {
-        const b = budgetFor(preset, listening, device);
-        const where = `${preset.id} / ${listening} / ${device}`;
-        assert.ok(b.toneDbfsPeak >= -42 && b.toneDbfsPeak <= -26, `${where} tone peak ${b.toneDbfsPeak}`);
-        if (preset.mix.rain > 0) assert.ok(b.rainDbfsRms >= -48 && b.rainDbfsRms <= -32, `${where} rain ${b.rainDbfsRms}`);
-        if (preset.mix.ocean > 0) {
-          assert.ok(b.oceanCrestDbfsPeak >= -40 && b.oceanCrestDbfsPeak <= -26, `${where} ocean crest ${b.oceanCrestDbfsPeak}`);
-          assert.ok(b.oceanBedDbfsRms >= -58 && b.oceanBedDbfsRms <= -38, `${where} ocean bed ${b.oceanBedDbfsRms}`);
-        }
-        if (preset.mix.purr > 0) assert.ok(b.purrDbfsRms >= -48 && b.purrDbfsRms <= -32, `${where} purr ${b.purrDbfsRms}`);
-        assert.ok(b.sumPeakDbfs <= -19, `${where} summed peak ${b.sumPeakDbfs}`);
-      }
-    }
+test('pad: false reproduces the 0.3 fields and adds a silent pad; pad: true adds the pad bus coherently', () => {
+  const args = { mix: { master: 0.45, tone: 0.35, rain: 0.7, ocean: 0.65, purr: 0.5 }, carrierHz: 198, rainIntensity: 0.35, oceanIntensity: 0.25 };
+  const without = levelBudget({ ...args, pad: false });
+  assert.deepEqual(levelBudget(args), without, 'pad defaults to false');
+  assert.equal(without.padDbfsPeak, -Infinity);
+  assert.equal(without.sumWithPadDbfs, without.sumPeakDbfs);
+  const withPad = levelBudget({ ...args, pad: true });
+  for (const key of ['toneDbfsPeak', 'rainDbfsRms', 'oceanBedDbfsRms', 'oceanCrestDbfsPeak', 'purrDbfsRms', 'sumPeakDbfs']) {
+    assert.equal(withPad[key], without[key], `${key} does not depend on the pad`);
+  }
+  const voice = gainToDb(VOICE_PEAK * carrierTrim(198));
+  near(withPad.padDbfsPeak, withPad.toneDbfsPeak - voice + gainToDb(dbToGain(PAD_DB) * padGainSum(198)), 1e-9, 'pad peak');
+  assert.ok(withPad.sumWithPadDbfs > withPad.sumPeakDbfs, 'the pad adds to the sum');
+  assert.equal(levelBudget({ ...args, mix: { ...args.mix, tone: 0 }, pad: true }).padDbfsPeak, -Infinity, 'the pad rides the tone slider');
+});
+
+test('§3.11 rows: Sleep, Deep sleep and Meditate on headphones, Deep on phone speakers', () => {
+  const rows = [
+    ['sleep', 'headphones', 'desktop', { tone: -37.2, sum: -22.1, pad: -47.3, withPad: -21.6 }],
+    ['deep', 'headphones', 'desktop', { tone: -37.0, sum: -22.4, pad: -47.0, withPad: -21.9 }],
+    ['deep', 'speakers', 'phone', { tone: -39.3, sum: -22.7, pad: -47.6, withPad: -22.2 }],
+    ['meditate', 'headphones', 'desktop', { tone: -30.2, sum: -20.4, pad: -38.3, withPad: -19.3 }],
+  ];
+  for (const [id, listening, device, expected] of rows) {
+    const b = budgetFor(getPreset(id), listening, device);
+    const where = `${id} / ${listening} / ${device}`;
+    near(b.toneDbfsPeak, expected.tone, 0.06, `${where} tone`);
+    near(b.sumPeakDbfs, expected.sum, 0.06, `${where} sum`);
+    near(b.padDbfsPeak, expected.pad, 0.06, `${where} pad`);
+    near(b.sumWithPadDbfs, expected.withPad, 0.06, `${where} sum with pad`);
   }
 });
 
-test('every slider at 1 with all four layers on stays at or below -1 dBFS with the limiter engaged', () => {
-  for (const preset of PRESETS) {
-    for (const listening of LISTENINGS) {
-      for (const device of DEVICES) {
-        const b = budgetFor(preset, listening, device, {
-          mix: { master: 1, tone: 1, rain: 1, ocean: 1, purr: 1 },
-          rainIntensity: 1,
-          oceanIntensity: 1,
-        });
-        const where = `${preset.id} / ${listening} / ${device}`;
-        assert.ok(b.sumPeakDbfs <= -1, `${where} summed peak ${b.sumPeakDbfs} would clip`);
-        assert.ok(b.sumPeakDbfs > limiterOutputDb(LIMITER.threshold), `${where} limiter not engaged at ${b.sumPeakDbfs}`);
-      }
+test('every preset at its quiet defaults sits inside the §3.11 windows on headphones and speakers, phone and desktop', () => {
+  for (const [preset, listening, device, where] of setups()) {
+    const b = budgetFor(preset, listening, device);
+    assert.ok(b.toneDbfsPeak >= -42 && b.toneDbfsPeak <= -26, `${where} tone peak ${b.toneDbfsPeak}`);
+    if (preset.mix.rain > 0) assert.ok(b.rainDbfsRms >= -48 && b.rainDbfsRms <= -32, `${where} rain ${b.rainDbfsRms}`);
+    if (preset.mix.ocean > 0) {
+      assert.ok(b.oceanCrestDbfsPeak >= -40 && b.oceanCrestDbfsPeak <= -26, `${where} ocean crest ${b.oceanCrestDbfsPeak}`);
+      assert.ok(b.oceanBedDbfsRms >= -58 && b.oceanBedDbfsRms <= -38, `${where} ocean bed ${b.oceanBedDbfsRms}`);
+    }
+    if (preset.mix.purr > 0) assert.ok(b.purrDbfsRms >= -48 && b.purrDbfsRms <= -32, `${where} purr ${b.purrDbfsRms}`);
+    assert.ok(b.sumPeakDbfs <= -19, `${where} summed peak ${b.sumPeakDbfs}`);
+    assert.ok(b.sumWithPadDbfs <= -19, `${where} summed peak with the pad ${b.sumWithPadDbfs}`);
+    if (preset.pad) assert.ok(b.padDbfsPeak <= b.toneDbfsPeak - 7.5, `${where} pad ${b.padDbfsPeak} too close to the tone ${b.toneDbfsPeak}`);
+    else assert.equal(b.padDbfsPeak, -Infinity, `${where} has no pad`);
+  }
+  const deepPhone = budgetFor(getPreset('deep'), 'speakers', 'phone');
+  assert.ok(deepPhone.toneDbfsPeak >= -41.5, `Deep sleep on phone speakers keeps a margin above the floor: ${deepPhone.toneDbfsPeak}`);
+});
+
+test('every slider at 1 with all four layers and the pad on stays at or below -1 dBFS with the limiter engaged', () => {
+  for (const [preset, listening, device, where] of setups()) {
+    const b = budgetFor(preset, listening, device, {
+      mix: { master: 1, tone: 1, rain: 1, ocean: 1, purr: 1 },
+      rainIntensity: 1,
+      oceanIntensity: 1,
+    });
+    for (const [what, db] of [['summed peak', b.sumPeakDbfs], ['summed peak with the pad', b.sumWithPadDbfs]]) {
+      assert.ok(db <= -1, `${where} ${what} ${db} would clip`);
+      assert.ok(db > limiterOutputDb(LIMITER.threshold), `${where} limiter not engaged at ${db}`);
     }
   }
 });

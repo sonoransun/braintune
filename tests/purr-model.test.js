@@ -115,3 +115,40 @@ test('cueEnvelope: 0.3 s rise to 0.25, 1.2 s hold, 0.7 s fall to 0', () => {
   near(long.endT, 4.4, 1e-9);
   near(long.events.find((e) => e.value === CUE_PEAK).at, 0.6, 1e-9, 'segments scale with the length');
 });
+
+test('drift defaults reproduce the 0.3 breaths exactly (fingerprint of four breaths from seed 2026)', () => {
+  const fingerprint = (drift) => {
+    const rng = mulberry32(2026);
+    let t0 = 3;
+    const rows = [];
+    for (let n = 0; n < 4; n++) {
+      const breath = drift === undefined ? planBreath(rng, t0, purrParams(0.8)) : planBreath(rng, t0, purrParams(0.8), drift);
+      rows.push([breath.nextStart, breath.events.length, breath.events.reduce((s, e) => s + e.at * 1.5 + e.value, 0)]);
+      t0 = breath.nextStart;
+    }
+    return rows;
+  };
+  const before = [
+    [4.976136513124221, 26, 1354.794259650323],
+    [6.894775450346061, 26, 1432.7361316761517],
+    [9.099543780437672, 26, 1509.6135017647455],
+    [10.850937352003532, 26, 1588.9384289747152],
+  ];
+  assert.deepEqual(fingerprint(undefined), before);
+  assert.deepEqual(fingerprint({}), before);
+  assert.deepEqual(fingerprint({ tempo: 1, amplitude: 1 }), before);
+});
+
+test('drift: tempo stretches all three phases, amplitude scales both peaks', () => {
+  for (const [tempo, depth] of [[0.9, 1], [1.2, 0.8], [1.05, 10 ** (-2 / 20)]]) {
+    const plain = planBreath(mulberry32(8), 20, purrParams());
+    const drifted = planBreath(mulberry32(8), 20, purrParams(), { tempo, amplitude: depth });
+    for (const phase of ['inhale', 'exhale', 'pause']) near(drifted.phases[phase], plain.phases[phase] * tempo, 1e-12, `${phase} × ${tempo}`);
+    near(drifted.nextStart - 20, (plain.nextStart - 20) * tempo, 1e-9, 'cycle length');
+    const env = drifted.events.filter((e) => e.param === 'breath');
+    const inhaleEnd = 20 + drifted.phases.inhale;
+    near(Math.max(...env.map((e) => e.value)), depth, 1e-12, 'exhale peak');
+    near(Math.max(...env.filter((e) => e.at < inhaleEnd - 1e-9).map((e) => e.value)), 0.75 * depth, 1e-12, 'inhale peak');
+    assert.deepEqual(drifted.events.filter((e) => e.param === 'rate').map((e) => e.value), plain.events.filter((e) => e.param === 'rate').map((e) => e.value), 'pitch untouched');
+  }
+});

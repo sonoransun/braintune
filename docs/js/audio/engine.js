@@ -1,22 +1,29 @@
-// The audio engine (§5 audio/engine.js, §6.7, §6.8 of the plan): the public API, the state
-// machine, every fade and the orchestration of the tone, rain, ocean and purr layers. Everything
-// time-related is injected (now, setTimer, clearTimer, rng, audioContextFactory, nav) so the
-// engine runs under Node's fake context in tests. Every master write goes through writeMaster(),
-// which ends with sessionTimer.rearmEndFade() so a timer's end fade survives any slider move.
+// The audio engine (§5 audio/engine.js, §6.7, §6.8 of the plan; v0.4 spec §3.6): the public API, the
+// state machine, every fade and the orchestration of the tone (with its pad and canon voices), rain,
+// ocean and purr layers, which share one texture per graph; a fresh session enters by mood. Everything
+// time-related is injected (now, setTimer, clearTimer, rng, audioContextFactory, nav) so the engine
+// runs under Node's fake context in tests. Every master write goes through writeMaster(), which ends
+// with sessionTimer.rearmEndFade() so a timer's end fade survives any slider move.
 //
 // States: idle | starting | playing | pausing | paused | ending | ended | ambient | blocked |
 // interrupted | unavailable. Events: 'state' { state }, 'timer' { remainingMs, phase },
-// 'wave' { at, duration, inMs }, 'blocked', 'interrupted', 'warning' { code, message },
+// 'wave' { at, duration, strength, inMs }, 'texture' { at, inMs, pad, gust, set },
+// 'entrance' { steps, endS }, 'blocked', 'interrupted', 'warning' { code, message },
 // 'ready' { layer } and 'context' { ctx } (for lifecycle.js).
 
 import { DEFAULT_SETTINGS } from '../core/state.js';
 import { masterGain, layerGain, dbToGain, CEILING_DB } from '../core/levels.js';
 import { gateParams } from '../core/gate.js';
 import { mulberry32 } from '../core/rng.js';
+import { createTexture } from '../core/texture-model.js';
+import { entrancePlan, entranceEnd } from '../core/entrance.js';
+import { VOICING_CROSSFADE_SECONDS } from '../core/voicing.js';
 import { createContext, buildMaster, buildBuses } from './graph.js';
-import { fade, createScheduler } from './automation.js';
-import { createBufferCache } from './buffers.js';
+import { holdParam, fade, createScheduler } from './automation.js';
+import { createBufferCache, prewarmLoops } from './buffers.js';
 import { createToneLayer } from './tone.js';
+import { createTexturePlanner } from './texture.js';
+import { createCanonLayer } from './canon.js';
 import { createRainLayer } from './rain.js';
 import { createOceanLayer } from './ocean.js';
 import { createPurrLayer } from './purr.js';
@@ -30,13 +37,21 @@ export const STATES = Object.freeze([
 
 const LAYERS = Object.freeze(['tone', 'rain', 'ocean', 'purr']);
 const AMBIENCE = Object.freeze(['rain', 'ocean', 'purr']);
+/** Ambience in the order the sleepy and calm entrances bring it in, so the first to sound is the first ready. */
+const WARM_ORDER = Object.freeze(['ocean', 'purr', 'rain']);
 const AUDIBLE = new Set(['starting', 'playing', 'ending', 'ambient']);
 const LEAD = 0.01;
 const RESUME_TIMEOUT_MS = 1500;
 const FADES = Object.freeze({ play: 1.5, pause: 0.6, pauseSuspend: 0.65, resume: 0.8, stop: 2, rebuild: 0.8, restore: 1.5, level: 0.5, mute: 0.3 });
 /** Extra time after the stop fade before the context suspends, so a soft chime can ring out. */
 const CHIME_TAIL_S = 0.5;
-const STEREO_CHECK = Object.freeze({ hz: 440, seconds: 1, dbfs: -24, edge: 0.02, tailMs: 2200 });
+/** Chime peak at full volume, scaled by the volume slider's taper but never below a tenth of it. */
+const CHIME = Object.freeze({ peak: 0.15, minMaster: 0.1 });
+/**
+ * Left, a gap, then right, each `seconds` long at `dbfs` after the output ceiling; the check resolves `tailMs` after it
+ * starts, and an idle context is suspended `releaseMs` later, once the right tone has ended, unless a session began.
+ */
+const STEREO_CHECK = Object.freeze({ hz: 440, seconds: 1.5, gapSeconds: 0.5, dbfs: -30, edge: 0.06, tailMs: 3500, releaseMs: 500 });
 /** Gate shape differences below these do not re-render the gate period. */
 const GATE_EPSILON = Object.freeze({ ramp: 0.05, depth: 0.1 });
 
@@ -71,7 +86,11 @@ export function createEngine({
   let buses = null;
   let cache = null;
   let scheduler = null;
+  let texture = null;
+  let texturePlanner = null;
   let tone = null;
+  let canon = null;
+  let canonEnabled = null;
   let preset = null;
   let gate = null;
   let masterTarget = 0;
@@ -124,6 +143,9 @@ export function createEngine({
   const audible = () => AUDIBLE.has(state);
   const effectiveLevel = (layer) => (cfg.muted[layer] ? 0 : layerGain(cfg.mix[layer]));
   const startBeat = (resolved) => resolved.glide?.fromHz ?? resolved.beatHz;
+  const ctxNow = () => ctx.currentTime + LEAD;
+  const msUntil = (at) => Math.max(0, (at - ctx.currentTime) * 1000);
+  const canonWanted = () => Boolean(preset?.canon && preset?.pad);
 
   // --- graph --------------------------------------------------------------------------------
 
@@ -135,22 +157,28 @@ export function createEngine({
     ctx = created;
     master = buildMaster(ctx);
     buses = buildBuses(ctx, master.master);
-    cache = createBufferCache(ctx, { rng, setTimer });
+    cache = createBufferCache(ctx, { setTimer });
     scheduler = createScheduler(ctx, { setTimer, clearTimer });
     tone = null;
+    canon = null;
+    texturePlanner = null;
     gate = null;
     masterTarget = 0;
     masterFadeEndT = 0;
     toneFadeEndT = 0;
     for (const layer of AMBIENCE) layers[layer] = null;
     for (const key of Object.keys(meters)) delete meters[key];
+    texture = createTexture(Math.floor(rng() * 2 ** 32) >>> 0);
     emit('context', { ctx });
   }
 
   function disposeGraph() {
     if (!ctx) return;
     scheduler.stop();
+    if (texturePlanner) scheduler.remove(texturePlanner);
     sessionTimer.forgetFade();
+    canon?.dispose();
+    canon = null;
     if (tone) tone.stop();
     for (const layer of AMBIENCE) layers[layer]?.dispose();
     cache.dispose();
@@ -217,14 +245,15 @@ export function createEngine({
 
   function ensureLayer(name) {
     if (layers[name]) return layers[name];
-    if (name === 'rain') layers.rain = createRainLayer(ctx, buses.rain, scheduler, cache, { rng, intensity: cfg.rainIntensity });
+    if (name === 'rain') layers.rain = createRainLayer(ctx, buses.rain, scheduler, cache, { rng, intensity: cfg.rainIntensity, texture });
     else if (name === 'ocean') {
       layers.ocean = createOceanLayer(ctx, buses.ocean, scheduler, cache, {
         rng,
         intensity: cfg.oceanIntensity,
-        onWave: (at, duration) => emit('wave', { at, duration, inMs: Math.max(0, (at - ctx.currentTime) * 1000) }),
+        texture,
+        onWave: (at, duration, strength) => emit('wave', { at, duration, strength, inMs: msUntil(at) }),
       });
-    } else if (name === 'purr') layers.purr = createPurrLayer(ctx, buses.purr, scheduler, cache, { rng, cueBus: master.master });
+    } else if (name === 'purr') layers.purr = createPurrLayer(ctx, buses.purr, scheduler, cache, { rng, cueBus: master.master, texture });
     else throw new RangeError(`engine: unknown layer "${name}"`);
     return layers[name];
   }
@@ -252,6 +281,7 @@ export function createEngine({
     return !gate || Math.abs(next.ramp - gate.ramp) >= GATE_EPSILON.ramp || Math.abs(next.depth - gate.depth) >= GATE_EPSILON.depth;
   }
 
+  /** Builds the tone, then the canon voices on its carrier and pad, then the texture planner on the pad's bus and filter. */
   function ensureTone() {
     if (tone) return;
     gate = preset.gate;
@@ -259,15 +289,36 @@ export function createEngine({
       carrierHz: preset.carrierHz, beatHz: startBeat(preset), mode: preset.mode, timbre: preset.timbre, pad: preset.pad, gate, setTimer, clearTimer,
     });
     tone.start();
+    canon = createCanonLayer(ctx, { carrier: tone.carrierNode, destination: tone.padInput, scheduler, rng });
+    canonEnabled = null;
+    texturePlanner = createTexturePlanner({
+      texture,
+      params: tone.textureParams,
+      nominal: tone.textureNominal,
+      onSnapshot: (at, snapshot) => emit('texture', { at, inMs: msUntil(at), ...snapshot }),
+    });
+    scheduler.add(texturePlanner);
   }
 
-  /** Moves the tone to a resolved preset over `seconds` (0 = at once). */
+  /** Turns the canon voices on or off when the preset's pad style and pad switch say so (only on a change). */
+  function syncCanon(t) {
+    const on = canonWanted();
+    if (on === canonEnabled) return;
+    canonEnabled = on;
+    canon.setEnabled(on, t);
+  }
+
+  /** Moves the tone to a resolved preset over `seconds` (0 = at once); the pad re-voices over 6 s (drone or canon). */
   function configureTone(resolved, seconds) {
     const current = tone.getState();
+    const t = ctxNow();
     tone.setMode(resolved.mode, { seconds: Math.min(1.2, seconds) });
+    tone.applyVoicing(resolved.carrierHz, t, VOICING_CROSSFADE_SECONDS, { canon: Boolean(resolved.canon) });
     if (resolved.carrierHz !== current.carrierHz) tone.setCarrier(resolved.carrierHz, { seconds });
     tone.setTimbre(resolved.timbre);
     tone.setPad(resolved.pad);
+    canon.setCarrierHz(resolved.carrierHz);
+    syncCanon(t);
     if (gateDiffers(resolved.gate)) {
       gate = resolved.gate;
       tone.setGate(gate, startBeat(resolved));
@@ -294,16 +345,37 @@ export function createEngine({
     }, seconds * 1000);
   }
 
-  /** From a running context: fade the master in over `seconds` and run the session. */
-  function runSession(seconds) {
+  /** From a running context: fade the master in over `seconds` and run the session; a fresh session also enters along `entrance`. */
+  function runSession(seconds, { entrance = null } = {}) {
+    if (entrance && canon && canonEnabled) {
+      canon.setEnabled(false, ctxNow()); // a fresh session waits 20-40 s for its first canon episode again
+      canonEnabled = false;
+    }
     ensureSessionGraph();
+    if (entrance) enter(entrance);
     scheduler.flush();
     scheduler.start();
     writeMaster(masterGain(cfg.mix.master), seconds, 'scurve');
     if (sessionTimer.isPaused()) sessionTimer.resume();
     else sessionTimer.onVisible();
     syncLayers();
-    schedulePlayingState(seconds);
+    schedulePlayingState(entrance ? entranceEnd(entrance) : seconds);
+  }
+
+  /** The entrance: every bus pinned at 0, then each step's bus rises along an S-curve; the pad's entries start with the tone. */
+  function enter(steps) {
+    const t = ctxNow();
+    for (const layer of LAYERS) {
+      holdParam(buses[layer].gain, t);
+      buses[layer].gain.setValueAtTime(0, t);
+    }
+    for (const step of steps) fade(buses[step.layer].gain, 0, effectiveLevel(step.layer), t + step.atS, step.seconds, 'scurve');
+    const toneStep = steps.find((step) => step.layer === 'tone');
+    if (toneStep) {
+      toneFadeEndT = t + toneStep.atS + toneStep.seconds;
+      if (preset.pad) tone.scheduleEntries(t + toneStep.atS);
+    }
+    emit('entrance', { steps, endS: entranceEnd(steps) });
   }
 
   function interrupted() {
@@ -339,6 +411,8 @@ export function createEngine({
     finish: finishSession,
     emit: (payload) => emit('timer', payload),
     presetId: () => preset?.id ?? null,
+    carrierHz: () => tone?.getState().carrierHz ?? preset?.carrierHz ?? 264,
+    chimePeak: () => CHIME.peak * Math.max(CHIME.minMaster, layerGain(cfg.mix.master)),
   });
 
   function finishSession(after) {
@@ -362,7 +436,7 @@ export function createEngine({
 
   // --- public API ---------------------------------------------------------------------------
 
-  /** Inside the Play gesture: audio session → context → graph → resume; resolves 'running' or 'blocked'. */
+  /** Inside the Play gesture: audio session → context → graph (its loops start building at once) → resume with a 1.5 s limit; resolves 'running' or 'blocked'. */
   function unlock() {
     if (state === 'unavailable') return Promise.resolve('blocked');
     if (!ctx) {
@@ -373,28 +447,27 @@ export function createEngine({
         warn('no-audio-context', err);
         return Promise.resolve('blocked');
       }
+      // A failure here also reaches each layer's own start, which reports it.
+      cache.warm(WARM_ORDER.filter((name) => effectiveLevel(name) > 0)).catch(() => {});
     }
-    return Promise.resolve()
-      .then(() => ctx.resume())
-      .then(() => ctx.state === 'running', () => false)
-      .then((running) => {
-        if (!running) {
-          if (state === 'idle' || state === 'starting' || state === 'blocked') {
-            setState('blocked');
-            emit('blocked');
-          }
-          return 'blocked';
+    return resumeContext().then((running) => {
+      if (!running) {
+        if (state === 'idle' || state === 'starting' || state === 'blocked') {
+          setState('blocked');
+          emit('blocked');
         }
-        if (state === 'blocked') {
-          setState('idle');
-          if (pendingPlay) {
-            const next = pendingPlay;
-            pendingPlay = null;
-            play(next);
-          }
+        return 'blocked';
+      }
+      if (state === 'blocked') {
+        setState('idle');
+        if (pendingPlay) {
+          const next = pendingPlay;
+          pendingPlay = null;
+          play(next);
         }
-        return 'running';
-      });
+      }
+      return 'running';
+    });
   }
 
   /** Starts a session with a resolved preset (tone at once, ambience as its buffers resolve); resolves whether it started. */
@@ -416,7 +489,7 @@ export function createEngine({
         return false;
       }
       if (state !== 'starting') return false;
-      runSession(FADES.play);
+      runSession(FADES.play, { entrance: entrancePlan(preset.mood, cfg) });
       if (pendingTimer) {
         const { ms, opts } = pendingTimer;
         pendingTimer = null;
@@ -513,21 +586,26 @@ export function createEngine({
     if (preset) preset = { ...preset, ...fields };
   }
 
-  /** Mode crossfade (1.2 s). */
+  /** Mode crossfade (1.2 s); the canon voices release and come back after a rest. */
   function setMode(mode) {
     patchPreset({ mode });
-    tone?.setMode(mode);
+    if (!tone) return;
+    tone.setMode(mode);
+    canon.hold(ctxNow());
   }
 
-  /** Carrier glide (1.5 s exponential). */
+  /** Carrier glide (1.5 s exponential), the pad re-voiced for its register; the canon voices release and come back after a rest. */
   function setCarrier(hz) {
     patchPreset({ carrierHz: hz });
-    tone?.setCarrier(hz);
+    if (!tone) return;
+    tone.setCarrier(hz);
+    canon.hold(ctxNow());
+    canon.setCarrierHz(hz);
   }
 
-  /** Beat ramp (1.5 s linear); re-renders the gate period only when its shape changes noticeably. */
+  /** Beat ramp (1.5 s linear); re-renders the gate period only when its shape changes noticeably (a gentle preset keeps its gentle gate). */
   function setBeat(hz) {
-    const next = gateParams(hz);
+    const next = gateParams(hz, { gentle: Boolean(preset?.gentle) });
     patchPreset({ beatHz: hz, gate: next, glide: null });
     if (!tone) return;
     tone.setBeat(hz);
@@ -543,10 +621,21 @@ export function createEngine({
     tone?.setTimbre(name);
   }
 
-  /** Pad on or off (1.2 s). */
+  /** Pad style alone (drone or canon): the pad re-voices over 6 s and the canon voices follow, without a preset re-apply. */
+  function setCanon(on) {
+    patchPreset({ canon: Boolean(on) });
+    if (!tone) return;
+    const t = ctxNow();
+    tone.applyVoicing(tone.getState().carrierHz, t, VOICING_CROSSFADE_SECONDS, { canon: Boolean(on) });
+    syncCanon(t);
+  }
+
+  /** Pad on or off (1.2 s), the canon voices with it. */
   function setPad(on) {
     patchPreset({ pad: Boolean(on) });
-    tone?.setPad(on);
+    if (!tone) return;
+    tone.setPad(on);
+    syncCanon(ctxNow());
   }
 
   function updateLayer(layer, seconds) {
@@ -593,7 +682,7 @@ export function createEngine({
     return ensureLayer('purr').cue();
   }
 
-  /** 1 s 440 Hz hard left, then 1 s hard right, at −24 dBFS (post-master, so the volume slider does not matter); resolves when done. */
+  /** 1.5 s of 440 Hz hard left, a 0.5 s gap, 1.5 s hard right at −30 dBFS, post-master (the volume slider does not matter); resolves at 3.5 s, the context still running for a session to follow. */
   function stereoCheck() {
     if (state === 'unavailable') return Promise.resolve(false);
     return unlock().then((result) => {
@@ -601,9 +690,11 @@ export function createEngine({
       const t0 = ctx.currentTime + 0.05;
       const amplitude = dbToGain(STEREO_CHECK.dbfs - CEILING_DB);
       checkTone(-1, t0, amplitude);
-      checkTone(1, t0 + STEREO_CHECK.seconds, amplitude);
+      checkTone(1, t0 + STEREO_CHECK.seconds + STEREO_CHECK.gapSeconds, amplitude);
       return wait(STEREO_CHECK.tailMs).then(() => {
-        if (state === 'idle' || state === 'ended') return suspendContext().then(() => true);
+        later(() => {
+          if (state === 'idle' || state === 'ended') suspendContext();
+        }, STEREO_CHECK.releaseMs);
         return true;
       });
     });
@@ -633,9 +724,11 @@ export function createEngine({
     osc.stop(at + seconds + edge);
   }
 
-  /** Attune: slow carrier sweep until commit or cancel (only while audible). */
+  /** Attune: slow carrier sweep until commit or cancel (only while audible); the canon voices release first. */
   function startAttune(opts) {
-    if (tone && audible()) tone.startAttune(opts);
+    if (!tone || !audible()) return;
+    tone.startAttune(opts);
+    canon.hold(ctxNow());
   }
 
   /** Locks the swept carrier and returns it in Hz. */
@@ -643,6 +736,7 @@ export function createEngine({
     if (!tone) return preset?.carrierHz ?? null;
     const hz = tone.commitAttune();
     patchPreset({ carrierHz: hz });
+    canon.setCarrierHz(hz);
     return hz;
   }
 
@@ -741,7 +835,7 @@ export function createEngine({
     });
   }
 
-  /** { state, ctxTime, sampleRate, contextState, mode, carrierHz, beatHz, presetId, timer: { remainingMs, phase } }. */
+  /** { state, ctxTime, sampleRate, contextState, mode, carrierHz, beatHz, presetId, canon, timer: { remainingMs, phase } }. */
   function getState() {
     const voice = tone ? tone.getState() : { mode: preset?.mode ?? null, carrierHz: preset?.carrierHz ?? null, beatHz: preset?.beatHz ?? null };
     return {
@@ -753,6 +847,7 @@ export function createEngine({
       carrierHz: voice.carrierHz,
       beatHz: voice.beatHz,
       presetId: preset?.id ?? null,
+      canon: canonWanted(),
       timer: { remainingMs: timerRemainingMs(), phase: pendingTimer ? 'paused' : sessionTimer.phase() },
     };
   }
@@ -786,6 +881,11 @@ export function createEngine({
     return Math.sqrt(sum / samples.length);
   }
 
+  /** Generates the noise loops and the drop kit ahead of the first tap, without an AudioContext (v0.4 spec §0 D3); idempotent. */
+  function prewarm() {
+    return prewarmLoops({ setTimer }).catch((err) => warn('prewarm-failed', err));
+  }
+
   /** Scheduler hidden mode (slower ticks, longer lookahead); lifecycle.js calls it on visibilitychange. */
   function setHidden(hidden) {
     scheduler?.setHidden(hidden);
@@ -804,8 +904,8 @@ export function createEngine({
   }
 
   return {
-    unlock, play, pause, resume, stop,
-    applyPreset, setMode, setCarrier, setBeat, setTimbre, setPad,
+    prewarm, unlock, play, pause, resume, stop,
+    applyPreset, setMode, setCarrier, setBeat, setTimbre, setPad, setCanon,
     setLayerLevel, setMuted, setMaster, setRainIntensity, setOceanIntensity,
     purrCue, stereoCheck, startAttune, commitAttune, cancelAttune,
     armTimer, cancelTimer, timerRemainingMs,

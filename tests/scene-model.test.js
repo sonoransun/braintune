@@ -25,25 +25,41 @@ test('pickQuality matrix: off > low > high/medium precedence', () => {
   assert.equal(pickQuality({ ...phone, deviceMemory: 1 }).tier, 'low');
 });
 
-test('pickQuality tiers carry the §7.6 numbers and are returned as copies', () => {
-  assert.deepEqual(pickQuality(desktop), { tier: 'high', dprCap: 2, fps: 60, maxDrops: 220, stars: true, ripples: true, blur: true });
-  assert.deepEqual(pickQuality(phone), { tier: 'medium', dprCap: 1.5, fps: 30, maxDrops: 160, stars: true, ripples: true, blur: false });
-  assert.deepEqual(pickQuality({ ...phone, saveData: true }), { tier: 'low', dprCap: 1, fps: 24, maxDrops: 80, stars: false, ripples: false, blur: false });
-  assert.deepEqual(pickQuality({ ...desktop, scene: 'off' }), { tier: 'off', dprCap: 1, fps: 10, maxDrops: 0, stars: false, ripples: false, blur: false });
+test('pickQuality tiers carry the §7.6 numbers plus glitter slots and are returned as copies', () => {
+  assert.deepEqual(QUALITY_TIERS, {
+    high: { tier: 'high', dprCap: 2, fps: 60, maxDrops: 220, stars: true, ripples: true, blur: true, glints: 14 },
+    medium: { tier: 'medium', dprCap: 1.5, fps: 30, maxDrops: 160, stars: true, ripples: true, blur: false, glints: 6 },
+    low: { tier: 'low', dprCap: 1, fps: 24, maxDrops: 80, stars: false, ripples: false, blur: false, glints: 0 },
+    off: { tier: 'off', dprCap: 1, fps: 10, maxDrops: 0, stars: false, ripples: false, blur: false, glints: 0 },
+  });
+  assert.deepEqual(pickQuality(desktop), QUALITY_TIERS.high);
+  assert.deepEqual(pickQuality(phone), QUALITY_TIERS.medium);
+  assert.deepEqual(pickQuality({ ...phone, saveData: true }), QUALITY_TIERS.low);
+  assert.deepEqual(pickQuality({ ...desktop, scene: 'off' }), QUALITY_TIERS.off);
   assert.notEqual(pickQuality(desktop), QUALITY_TIERS.high);
   assert.ok(Object.isFrozen(QUALITY_TIERS.high));
 });
 
-test('makeWaveBands: four bands at 0.60/0.72/0.84/0.95 h with scaled amplitudes and the §7.6 components', () => {
+test('makeWaveBands: four bands at 0.60/0.72/0.84/0.95 h with scaled amplitudes and the §7.6 components plus fine ripples', () => {
   const bands = makeWaveBands(390, 409);
   assert.equal(bands.length, 4);
   assert.deepEqual(bands.map((b) => b.base), [0.6 * 409, 0.72 * 409, 0.84 * 409, 0.95 * 409]);
   assert.deepEqual(bands.map((b) => b.amp), [4, 7, 11, 16]);
-  assert.deepEqual(bands[0].components, [{ lambda: 220, omega: 0.18, weight: 1 }, { lambda: 130, omega: -0.11, weight: 0.5 }]);
-  assert.deepEqual(bands[1].components.map((c) => c.lambda), [300, 170, 90]);
-  assert.deepEqual(bands[2].components.map((c) => c.omega), [0.11, -0.08, 0.17]);
-  assert.deepEqual(bands[3].components.map((c) => c.weight), [1, 0.5, 0.25]);
-  assert.deepEqual(bands[3].components.map((c) => c.lambda), [560, 310, 150]);
+  const table = (b) => bands[b].components.map(({ lambda, omega, weight }) => [lambda, omega, weight]);
+  assert.deepEqual(table(0), [[220, 0.18, 1], [130, -0.11, 0.5]]);
+  assert.deepEqual(table(1), [[300, 0.14, 1], [170, -0.09, 0.45], [90, 0.21, 0.2], [46, 0.24, 0.07]]);
+  assert.deepEqual(table(2), [[420, 0.11, 1], [230, -0.08, 0.5], [120, 0.17, 0.25], [62, -0.21, 0.09]]);
+  assert.deepEqual(table(3), [[560, 0.09, 1], [310, -0.07, 0.5], [150, 0.13, 0.25], [84, 0.23, 0.1]]);
+});
+
+test('wave components: weights fall with spatial frequency and every |ω| ≤ 0.3 rad/s', () => {
+  for (const band of makeWaveBands(390, 409)) {
+    const bySpatialFrequency = [...band.components].sort((a, b) => b.lambda - a.lambda);
+    for (let i = 1; i < bySpatialFrequency.length; i += 1) {
+      assert.ok(bySpatialFrequency[i].weight < bySpatialFrequency[i - 1].weight, `λ ${bySpatialFrequency[i].lambda}`);
+    }
+    for (const c of band.components) assert.ok(Math.abs(c.omega) <= 0.3, `ω ${c.omega}`);
+  }
 });
 
 test('amplitude scale is min(1.6, h / 409)', () => {

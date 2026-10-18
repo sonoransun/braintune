@@ -1,10 +1,11 @@
 // Level mathematics for the audio graph: dB helpers, slider tapers, limiter
-// constants, makeup and ceiling gains, carrier trim, fade shapes, bed gains
-// and the closed-form level budget that the tests hold every preset to.
-// Pure: no browser globals. Units: Hz, seconds and linear gain unless a name
-// says Db (relative decibels) or Dbfs (decibels below digital full scale).
+// constants, makeup and ceiling gains, carrier trim, fade shapes, bed gains,
+// the ocean crash curve and the closed-form level budget that the tests hold
+// every preset to. Pure: no browser globals. Units: Hz, seconds and linear gain
+// unless a name says Db (relative decibels) or Dbfs (decibels below digital full scale).
 
 import { timbreGainTrim } from './timbres.js';
+import { padGainSum } from './voicing.js';
 
 /** Master gain at the top of the Volume slider (linear). */
 export const MASTER_MAX = 0.7;
@@ -107,6 +108,11 @@ export function bedGainDb(kind, x) {
   return curve(x);
 }
 
+/** Peak of the ocean crash gain for an intensity 0..1, dB: -10 + 10i (ocean-model crash.peakDb). */
+export function crashPeakDb(intensity) {
+  return -10 + 10 * intensity;
+}
+
 /** Static limiter curve: output dBFS for a peak at `inDb` through the limiter (hard knee, attack ignored), its makeup gain and the ceiling gain. */
 export function limiterOutputDb(inDb) {
   const { threshold, ratio } = LIMITER;
@@ -116,7 +122,7 @@ export function limiterOutputDb(inDb) {
 }
 
 /**
- * Closed-form level budget of the §6.1 graph in dBFS per ear (§6.6).
+ * Closed-form level budget of the §6.1 graph in dBFS per ear (§6.6, §3.11 of the 0.4 spec).
  * `mix` holds slider positions 0..1 for master, tone, rain, ocean and purr; a
  * muted layer is passed as 0 (its figure becomes -Infinity and it adds
  * nothing to the sum); a missing layer counts as 0 and a missing master as 1.
@@ -127,13 +133,17 @@ export function limiterOutputDb(inDb) {
  * this sine while their true peak is this times timbreGainTrim(timbre), which
  * is what enters the sum; the rain and ocean beds are noise loops of RMS
  * -11 dBFS at 0 dB bed gain, with drops and rumble left out; the ocean crest
- * is the white loop's 0.9 peak through the crash gain (-6 + 6i dB); the purr
+ * is the white loop's 0.9 peak through the crash gain (crashPeakDb); the purr
  * bus is -12 dBFS RMS at full breath; sumPeakDbfs adds the layers' linear
  * peaks coherently (ambience peaks taken as RMS + 10 dB, ocean at its crest)
  * before the limiter and passes the sum through limiterOutputDb, so every
  * figure includes the makeup and ceiling gains (-1.0 dB together).
+ * With `pad`, padDbfsPeak is the pad bus at its coherent worst case (every
+ * slot of the carrier's register peaking together, padGainSum, at PAD_DB on
+ * the tone slider; the canon shares the same sum) and sumWithPadDbfs adds it
+ * to the sum before the limiter; without it they are -Infinity and sumPeakDbfs.
  */
-export function levelBudget({ mix, carrierHz, rainIntensity, oceanIntensity, timbre = 'sine' }) {
+export function levelBudget({ mix, carrierHz, rainIntensity, oceanIntensity, timbre = 'sine', pad = false }) {
   const { master = 1, tone = 0, rain = 0, ocean = 0, purr = 0 } = mix;
   const masterDb = gainToDb(masterGain(master));
   const chain = (slider) => gainToDb(layerGain(slider)) + masterDb;
@@ -144,6 +154,7 @@ export function levelBudget({ mix, carrierHz, rainIntensity, oceanIntensity, tim
   const oceanBedRms = NOISE_BED_RMS_DB + bedGainDb('surf', oceanIntensity) + chain(ocean);
   const oceanCrestPeak = gainToDb(NOISE_LOOP_PEAK) + crashPeakDb(oceanIntensity) + chain(ocean);
   const purrRms = PURR_BUS_RMS_DB + chain(purr);
+  const padPeak = pad ? gainToDb(dbToGain(PAD_DB) * padGainSum(carrierHz)) + chain(tone) : -Infinity;
 
   const sumPeak =
     dbToGain(tonePeak) * timbreGainTrim(timbre) +
@@ -158,15 +169,12 @@ export function levelBudget({ mix, carrierHz, rainIntensity, oceanIntensity, tim
     oceanCrestDbfsPeak: oceanCrestPeak + post,
     purrDbfsRms: purrRms + post,
     sumPeakDbfs: limiterOutputDb(gainToDb(sumPeak)),
+    padDbfsPeak: padPeak + post,
+    sumWithPadDbfs: limiterOutputDb(gainToDb(sumPeak + dbToGain(padPeak))),
   };
 }
 
 /** Makeup plus ceiling gain in dB: CEILING_DB (-1.0) by construction. */
 function postLimiterDb() {
   return gainToDb(compressorMakeupGain(LIMITER)) + gainToDb(ceilingGain());
-}
-
-/** Peak of the ocean crash gain, dB (ocean-model crash.peakDb = -6 + 6i, §6.4). */
-function crashPeakDb(intensity) {
-  return -6 + 6 * intensity;
 }

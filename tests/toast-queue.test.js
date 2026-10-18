@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createToastQueue, createAnnounceQueue } from '../docs/js/core/toast-queue.js';
+import { createToastQueue, createAnnounceQueue, shouldDeferToast } from '../docs/js/core/toast-queue.js';
 
 function clock(start = 0) {
   let t = start;
@@ -96,6 +96,19 @@ test('announce queue drops identical text within dedupeMs', () => {
   assert.equal(a.push('Paused.'), true, 'stale duplicate passes once dedupeMs has elapsed');
   assert.equal(a.push(''), false);
   assert.equal(a.push(null), false);
+});
+
+test('shouldDeferToast: only a sticky toast waits, during a sleepy session or while the screen is dimmed', () => {
+  for (const sticky of [true, false]) {
+    for (const mood of ['sleepy', 'calm', 'alert', null]) {
+      for (const dimmed of [true, false]) {
+        const expected = sticky && (mood === 'sleepy' || dimmed);
+        assert.equal(shouldDeferToast({ sticky, mood, dimmed }), expected, `sticky ${sticky}, mood ${mood}, dimmed ${dimmed}`);
+      }
+    }
+  }
+  assert.equal(shouldDeferToast(), false, 'nothing given defers nothing');
+  assert.equal(shouldDeferToast({ sticky: 'yes', mood: 'sleepy' }), false, 'only a real sticky flag counts');
 });
 
 test('queues require an injected clock', () => {

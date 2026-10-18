@@ -1,11 +1,15 @@
-// Rain model: intensity curves, the slow gust walk, Poisson drop planning and the
-// offline-rendered drop kit (§5, §6.4 of the plan). Pure: RNG and sample rate are
-// injected. Units: Hz, seconds and linear gain unless a name says Db.
+// Rain model: intensity curves, Poisson drop planning and the offline-rendered drop kit
+// (§5, §6.4 of the plan). Gusts come from the session texture since 0.4: gustAt (re-exported
+// from core/texture-model.js) turns its 1/f gust curve into a bed offset within ±gustSpanDb
+// and a drop-rate scale. Pure: RNG and sample rate are injected. Units: Hz, seconds and
+// linear gain unless a name says Db.
 
 import { expInterval, logUniform, randRange } from './rng.js';
 import { makeBiquad } from './biquad.js';
 import { whiteNoise, normalize } from './noise.js';
 import { bedGainDb, dbToGain, gainToDb } from './levels.js';
+
+export { gustAt } from './texture-model.js';
 
 /** Most drops per second; above this the intensity goes into the bed. */
 export const MAX_DROP_RATE = 30;
@@ -19,13 +23,9 @@ const PLINK_SHARE = 0.35;
 const DROP_LEVEL_DB = [-18, -6];
 const DROP_RATE_RANGE = [0.75, 1.35];
 const PAN_RANGE = 0.8;
-const GUST_SECONDS = [10, 25];
-const GUST_RATE_SCALE = [0.6, 1.4];
 const END_TAPER_SECONDS = 0.002;
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-const smoothstep = (x) => x * x * (3 - 2 * x);
 
 /** Rain parameters for intensity s in 0..1: drop rate min(30, 2 + 28s²), bed −14 + 14s dB with its low-pass at 2500 + 5500s Hz, rumble −36 + 20s² dB, drop level window [−18, −6] dB shifted by 20·log10(0.5 + 0.5s), drop playback rate window and the gust span ±(1 + 2s) dB. */
 export function rainParams(s) {
@@ -39,34 +39,6 @@ export function rainParams(s) {
     dropLevelDb: [DROP_LEVEL_DB[0] + levelShiftDb, DROP_LEVEL_DB[1] + levelShiftDb],
     dropRateRange: [...DROP_RATE_RANGE],
     gustSpanDb: 1 + 2 * x,
-  };
-}
-
-/** Gust walk state for intensity s at rest: no bed offset, nominal drop rate, a new segment due at once. */
-export function initialGust(s) {
-  return { spanDb: 1 + 2 * clamp01(s), elapsed: 0, duration: 0, gainFrom: 0, gainTo: 0, rateFrom: 1, rateTo: 1, gainDb: 0, rateScale: 1 };
-}
-
-/** Advances the gust walk by dt seconds: every 10–25 s a new bed offset within ±spanDb and a drop-rate scale in 0.6–1.4 are drawn and approached along a smoothstep; returns the next state without touching the old one. */
-export function gustWalk(state, dt, rng) {
-  let next = { ...state, elapsed: state.elapsed + Math.max(0, dt) };
-  if (next.elapsed >= next.duration) next = newSegment(next, rng);
-  const x = next.duration > 0 ? Math.min(1, next.elapsed / next.duration) : 1;
-  const k = smoothstep(x);
-  next.gainDb = lerp(next.gainFrom, next.gainTo, k);
-  next.rateScale = lerp(next.rateFrom, next.rateTo, k);
-  return next;
-}
-
-function newSegment(state, rng) {
-  return {
-    ...state,
-    elapsed: 0,
-    duration: randRange(rng, GUST_SECONDS[0], GUST_SECONDS[1]),
-    gainFrom: state.gainDb,
-    gainTo: randRange(rng, -state.spanDb, state.spanDb),
-    rateFrom: state.rateScale,
-    rateTo: randRange(rng, GUST_RATE_SCALE[0], GUST_RATE_SCALE[1]),
   };
 }
 
@@ -100,10 +72,14 @@ export function renderDropVariant(sampleRate, rng, kind = 'patter') {
   return { kind, pan, channels: [mono.map((v) => v * gainL), mono.map((v) => v * gainR)] };
 }
 
-/** The drop kit: `variants` stereo drops, the first round(35 %) plinks and the rest patter. */
+/** Kind of variant i in a kit of `variants`: the first round(35 %) are plinks, the rest patter. */
+export function kitVariantKind(i, variants = KIT_VARIANTS) {
+  return i < Math.round(PLINK_SHARE * variants) ? 'plink' : 'patter';
+}
+
+/** The drop kit: `variants` stereo drops rendered in order with one rng, kinds by kitVariantKind. */
 export function renderDropKit(sampleRate, rng, { variants = KIT_VARIANTS } = {}) {
-  const plinks = Math.round(PLINK_SHARE * variants);
-  return Array.from({ length: variants }, (_, i) => renderDropVariant(sampleRate, rng, i < plinks ? 'plink' : 'patter'));
+  return Array.from({ length: variants }, (_, i) => renderDropVariant(sampleRate, rng, kitVariantKind(i, variants)));
 }
 
 function dropLength(sampleRate, attack, tau) {

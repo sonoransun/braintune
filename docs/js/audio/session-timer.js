@@ -6,7 +6,8 @@
 //
 // hooks: { now() → ms, setTimer, clearTimer, ctxTime() → seconds | null,
 //          fadeTarget(after) → { param, value, floorT } | null   (floorT: when the engine's own in-flight fade on that param ends),
-//          chimeIn() → AudioNode | null, onEnding(), finish(after), emit(payload), presetId() }
+//          chimeIn() → AudioNode | null, onEnding(), finish(after), emit(payload), presetId(),
+//          carrierHz?() → Hz and chimePeak?() → linear peak, which tune the chime to the session (timer-core chimeEvents) }
 
 import { createTimerCore, endFadePlan, chimeEvents } from '../core/timer-core.js';
 import { holdParam, applyEvents } from './automation.js';
@@ -130,7 +131,7 @@ export function createSessionTimer(hooks) {
     const nowT = ctxNow();
     if (!node || nowT === null) return;
     const ctx = node.context;
-    for (const { freq, startT, duration, peak } of chimeEvents(nowT + CHIME_TAIL)) {
+    for (const { freq, startT, duration, peak } of chimeEvents(nowT + CHIME_TAIL, { carrierHz: hooks.carrierHz?.(), peak: hooks.chimePeak?.() })) {
       const osc = ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.value = freq;

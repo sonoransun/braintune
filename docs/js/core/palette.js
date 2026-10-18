@@ -50,6 +50,18 @@ export const NEUTRALS = Object.freeze({
   }),
 });
 
+/** Per-band scrim overrides (tokens.css html[data-band]): dark gamma's peach glow needs a denser status pill. */
+export const SCRIM_BY_BAND = Object.freeze({
+  dark: Object.freeze({ gamma: 'rgb(10 14 32 / 0.66)' }),
+  light: Object.freeze({}),
+});
+
+/** The status scrim for a theme and band: the band override or the theme's neutral scrim; throws on an unknown theme. */
+export function scrimFor(theme, band) {
+  if (!NEUTRALS[theme]) throw new RangeError(`Unknown theme: ${theme}`);
+  return SCRIM_BY_BAND[theme][band] ?? NEUTRALS[theme].scrim;
+}
+
 /** Palette object for a band in a theme; throws on an unknown band or theme. */
 export function bandPalette(band, theme = 'dark') {
   const table = BAND_PALETTES[theme];
@@ -171,6 +183,12 @@ export function mixOklab(hexA, hexB, t) {
   const lab = a.map((v, i) => v + (b[i] - v) * k);
   const [r, g, bl] = oklabToLinear(lab).map(linearToSrgb);
   return rgbToHex({ r: r * 255, g: g * 255, b: bl * 255 });
+}
+
+/** Scene vignette for a palette at light 0 (dark) … 1 (light): skyTop or seaNear pulled toward black → { color, alpha }. */
+export function vignetteTint({ skyTop, seaNear }, light = 0) {
+  const k = clamp01(light);
+  return { color: mixOklab(mixOklab(skyTop, '#000000', 0.5), mixOklab(seaNear, '#000000', 0.35), k), alpha: 0.24 - 0.14 * k };
 }
 
 /** Hermite smoothstep of t clamped to [0, 1]. */

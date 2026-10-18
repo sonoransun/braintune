@@ -1,10 +1,14 @@
-// Ocean layer (§6.4 of the plan): a stereo brown surf bed behind a 400 Hz low-pass with a 0.04 Hz
-// ±2 dB sway, and one automation bundle per wave (swell, crash, wash, pan) planned with lookahead
-// from ocean-model.planWave. Every crash is reported through onWave(tCrash, Tw) for the scene.
+// Ocean layer (§6.4 of the plan, v0.4 spec §3.8): a stereo brown surf bed behind a 400 Hz low-pass
+// whose level sways along the texture's 1/f surf curve (at most 3 dB under nominal, one target per
+// knot of its own jittered stream), and one automation bundle per wave (swell, crash, wash, pan)
+// planned with lookahead from ocean-model.planWave at the texture's set energy, so waves come in
+// sets and lulls. Every crash is reported through onWave(tCrash, Tw, strength) for the scene.
 // Loop sources start once and keep looping silently behind `out` between start/stop.
 
 import { dbToGain } from '../core/levels.js';
 import { oceanParams, planWave } from '../core/ocean-model.js';
+import { mapDb } from '../core/fractal.js';
+import { TEXTURE_RECIPE } from '../core/texture-model.js';
 import { glideTo, fade, applyEvents } from './automation.js';
 
 const LEAD = 0.01;
@@ -13,10 +17,13 @@ const FILTER_Q = 0.7;
 const FADE_IN_SECONDS = 1.5;
 const FADE_OUT_SECONDS = 0.5;
 const LEVEL_TAU = 0.125;
+/** Without a texture the surf holds its level and every wave sits mid-set. */
+const STILL_SEA = Object.freeze({ surf: { at: () => 1 }, surfTicks: () => [], set: { at: () => 0.5 } });
 
-/** Creates the ocean layer into `bus`: { setIntensity(i), start() → Promise<boolean>, stop({ seconds }), dispose(), ready }. */
-export function createOceanLayer(ctx, bus, scheduler, cache, { rng, intensity = 0.35, onWave } = {}) {
+/** Creates the ocean layer into `bus`, shaped by `texture` (core/texture-model.js): { setIntensity(i), start() → Promise<boolean>, stop({ seconds }), dispose(), ready }. */
+export function createOceanLayer(ctx, bus, scheduler, cache, { rng, intensity = 0.35, onWave, texture = null } = {}) {
   const now = () => ctx.currentTime + LEAD;
+  const field = texture ?? STILL_SEA;
   let params = oceanParams(intensity);
   let buffers = null;
   let loops = null;
@@ -38,16 +45,11 @@ export function createOceanLayer(ctx, bus, scheduler, cache, { rng, intensity = 
     return f;
   };
 
+  const sway = (t) => mapDb(field.surf.at(t), params.surfSway.depthDb);
   const out = gain(0, bus);
-  const surfGain = gain(0, out);
+  const surfSway = gain(sway(ctx.currentTime), out);
+  const surfGain = gain(0, surfSway);
   const surfLP = filter('lowpass', SURF_LP_HZ, FILTER_Q, surfGain);
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = params.surfLfo.hz;
-  const lfoDepth = gain(0);
-  lfo.connect(lfoDepth);
-  lfoDepth.connect(surfGain.gain);
-  lfo.start(ctx.currentTime);
 
   const pan = ctx.createStereoPanner();
   pan.pan.value = 0;
@@ -73,9 +75,7 @@ export function createOceanLayer(ctx, bus, scheduler, cache, { rng, intensity = 
   const surfLevel = () => dbToGain(params.surfGainDb) * (buffers ? buffers.surf.trim : 1);
 
   function applySurf(t, tau = LEVEL_TAU) {
-    const level = surfLevel();
-    glideTo(surfGain.gain, level, t, tau, 'target');
-    glideTo(lfoDepth.gain, level * (dbToGain(params.surfLfo.depthDb) - 1), t, tau, 'target');
+    glideTo(surfGain.gain, surfLevel(), t, tau, 'target');
   }
 
   function loopSource(buffer, ...destinations) {
@@ -96,23 +96,29 @@ export function createOceanLayer(ctx, bus, scheduler, cache, { rng, intensity = 
     ];
   }
 
+  // Wave bundles move plannedUpTo to the next wave, so the sway knots are planned up to there as well.
   const planner = {
     plannedUpTo: 0,
     plan(from, to) {
       const items = [];
       let t0 = Math.max(nextStart, from);
       while (t0 < to) {
-        const wave = planWave(rng, t0, params);
+        const wave = planWave(rng, t0, params, { set: field.set.at(t0) });
         items.push({ at: t0, events: wave.events, visual: wave.visual });
         t0 = wave.nextStart;
       }
       nextStart = t0;
       planner.plannedUpTo = t0;
+      for (const { t } of field.surfTicks(from, t0)) items.push({ at: t, sway: sway(t) });
       return items;
     },
     apply(item) {
+      if (!item.events) {
+        glideTo(surfSway.gain, item.sway, item.at, TEXTURE_RECIPE.surf.tau, 'target');
+        return;
+      }
       applyEvents(paramMap, item.events);
-      if (typeof onWave === 'function') onWave(item.visual.at, item.visual.duration);
+      if (typeof onWave === 'function') onWave(item.visual.at, item.visual.duration, item.visual.strength);
     },
     reset() {
       nextStart = 0;
@@ -152,7 +158,6 @@ export function createOceanLayer(ctx, bus, scheduler, cache, { rng, intensity = 
     running = false;
     scheduler.remove(planner);
     const t = ctx.currentTime;
-    lfo.stop(t);
     if (loops) {
       for (const source of loops) source.stop(t);
       loops = null;

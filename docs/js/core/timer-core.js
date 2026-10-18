@@ -1,5 +1,8 @@
 // Session timer maths. Pure: the wall clock is injected as now() in ms; audio times are context seconds.
 
+/** Highest chime pitch, Hz: the chime sits an octave and a twelfth above the carrier, folded down below this. */
+const CHIME_MAX_HZ = 1000;
+
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -92,10 +95,17 @@ export function endFadePlan({ remainingMs, endFadeSeconds, nowT, masterValue, n 
   return { startT, duration, events };
 }
 
-/** Two soft chime notes (C5 then G5), 1.2 s each with a 0.4 s overlap, peak 0.15. */
-export function chimeEvents(t0) {
+/** Chime pitches for a session carrier f: its octave and twelfth [2f, 3f], halved while 3f is above 1 kHz (264 → 528/792, 440 → 440/660). */
+export function chimeFrequencies(carrierHz = 264) {
+  const folds = Math.max(0, Math.ceil(Math.log2((3 * carrierHz) / CHIME_MAX_HZ)));
+  return [(2 * carrierHz) / 2 ** folds, (3 * carrierHz) / 2 ** folds];
+}
+
+/** Two soft chime notes on the session's harmonic series (chimeFrequencies), 1.2 s each with a 0.4 s overlap, at `peak`. */
+export function chimeEvents(t0, { carrierHz = 264, peak = 0.15 } = {}) {
+  const [first, second] = chimeFrequencies(carrierHz);
   return [
-    { freq: 523.25, startT: t0, duration: 1.2, peak: 0.15 },
-    { freq: 783.99, startT: t0 + 0.8, duration: 1.2, peak: 0.15 },
+    { freq: first, startT: t0, duration: 1.2, peak },
+    { freq: second, startT: t0 + 0.8, duration: 1.2, peak },
   ];
 }

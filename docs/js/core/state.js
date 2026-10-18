@@ -1,10 +1,12 @@
 // Settings schema, migration and an observable store. Pure: storage and timers are injected.
 
+import { getPreset } from './presets.js';
+
 /** Key under which settings are kept in the injected storage. */
 export const STORAGE_KEY = 'braintune:settings:v1';
 
 /** Current settings schema version; migrate() always stamps it. */
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 
 /** Default settings, deep-frozen; the store always hands out fresh clones. */
 export const DEFAULT_SETTINGS = deepFreeze({
@@ -13,10 +15,11 @@ export const DEFAULT_SETTINGS = deepFreeze({
   listening: 'speakers',
   presetId: 'sleep',
   custom: null,
-  mix: { master: 0.45, tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 },
+  mix: { master: 0.45, tone: 0.35, rain: 0.7, ocean: 0.65, purr: 0.5 },
   muted: { tone: false, rain: false, ocean: false, purr: false },
   rainIntensity: 0.35,
-  oceanIntensity: 0.35,
+  oceanIntensity: 0.25,
+  padStyle: 'auto',
   timer: { byPreset: {}, after: 'stop' },
   theme: 'dark',
   motion: 'auto',
@@ -33,8 +36,10 @@ export const DEFAULT_SETTINGS = deepFreeze({
 
 const CUSTOM_TEMPLATE = deepFreeze({ beatHz: 10, carrierHz: 256, timbre: 'velvet', pad: true, mode: 'auto' });
 const SESSION_TEMPLATE = deepFreeze({ presetId: 'sleep', endsAt: null, pausedRemainingMs: null });
-const TIMBRES = ['sine', 'velvet', 'glass', 'warm'];
+const TIMBRES = ['sine', 'velvet', 'warm', 'amber', 'glass', 'bell'];
 const MODES = ['auto', 'binaural', 'monaural', 'isochronic'];
+const PAD_STYLES = ['auto', 'drone', 'canon'];
+const LAYERS = ['tone', 'rain', 'ocean', 'purr'];
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 // --- generic helpers --------------------------------------------------------
@@ -132,6 +137,7 @@ const TOP_RULES = {
   muted: shape({ tone: bool, rain: bool, ocean: bool, purr: bool }),
   rainIntensity: unit,
   oceanIntensity: unit,
+  padStyle: oneOf(PAD_STYLES),
   timer: shape({ byPreset: minutesMap, after: oneOf(['stop', 'ambient']) }),
   theme: oneOf(['dark', 'light', 'auto']),
   motion: oneOf(['auto', 'full', 'still']),
@@ -146,16 +152,44 @@ const TOP_RULES = {
   hints: shape({ orb: bool, sheet: bool, stereoCheckDone: bool }),
 };
 
+// --- migration --------------------------------------------------------------
+
+/** Keys every older store keeps when it moves to the current version; everything else takes the new defaults (Sleep with a moderate purr, a quiet tone, rain on, low volume, ∞ timer). */
+const KEPT_ACROSS_VERSIONS = ['firstRunDone', 'listening', 'theme', 'motion', 'scene', 'cats', 'haptics', 'shortcuts', 'keepAwake', 'nightDim', 'hints', 'padStyle'];
+
+/** Keys a v3 store also keeps: what it was playing and how (its master volume and layer mix follow fromV3). */
+const KEPT_FROM_V3 = ['presetId', 'timer', 'autoplay', 'custom', 'session', 'muted', 'rainIntensity', 'oceanIntensity'];
+
+/** Layer mixes the v3 Sleep and Deep sleep presets stored; a v3 store still on one of them takes the preset's current mix. */
+const V3_PRESET_MIX = deepFreeze({
+  sleep: { tone: 0.35, rain: 0.6, ocean: 0.55, purr: 0.45 },
+  deep: { tone: 0.3, rain: 0.65, ocean: 0.6, purr: 0.45 },
+});
+
+/** Sea intensity of the v3 Sleep preset; a stock Sleep store moves on to Sleep's current sea. */
+const V3_SLEEP_SEA = 0.35;
+
+function pick(raw, keys) {
+  return Object.fromEntries(keys.filter((key) => Object.hasOwn(raw, key)).map((key) => [key, raw[key]]));
+}
+
+/** A v3 store's kept keys with its master volume; a stock Sleep or Deep sleep layer mix (and Sleep's stock sea) moves to the preset's current values, any other mix stays. */
+function fromV3(raw) {
+  const out = pick(raw, [...KEPT_ACROSS_VERSIONS, ...KEPT_FROM_V3]);
+  const mix = isPlainObject(raw.mix) ? raw.mix : {};
+  const stock = Object.hasOwn(V3_PRESET_MIX, raw.presetId) && LAYERS.every((layer) => mix[layer] === V3_PRESET_MIX[raw.presetId][layer]);
+  if (!stock) return { ...out, mix };
+  const preset = getPreset(raw.presetId);
+  const sea = raw.presetId === 'sleep' && raw.oceanIntensity === V3_SLEEP_SEA ? { oceanIntensity: preset.oceanIntensity } : {};
+  return { ...out, ...sea, mix: { ...preset.mix, master: mix.master } };
+}
+
 // --- public API -------------------------------------------------------------
 
-/** Coerces any value into valid settings: unknown keys dropped, numbers clamped, enums checked, version stamped. */
-/** Keys an older store keeps when it moves to the current version; everything else takes the new defaults (Sleep with a moderate purr, a quiet tone, rain on, low volume, ∞ timer). */
-const KEPT_ACROSS_VERSIONS = ['firstRunDone', 'listening', 'theme', 'motion', 'scene', 'cats', 'haptics', 'shortcuts', 'keepAwake', 'nightDim', 'hints'];
-
-/** Validated settings from any stored value; an older versioned store keeps only personal choices so new defaults apply once. */
+/** Validated settings from any stored value: unknown keys dropped, numbers clamped, enums checked, version stamped; an older versioned store keeps only personal choices (a v3 store also what it was playing, fromV3) so new defaults apply once. */
 export function migrate(raw) {
   if (isPlainObject(raw) && Number.isInteger(raw.v) && raw.v < SETTINGS_VERSION) {
-    raw = Object.fromEntries(KEPT_ACROSS_VERSIONS.filter((key) => key in raw).map((key) => [key, raw[key]]));
+    raw = raw.v === 3 ? fromV3(raw) : pick(raw, KEPT_ACROSS_VERSIONS);
   }
   return validateShape(raw, DEFAULT_SETTINGS, TOP_RULES);
 }
@@ -172,6 +206,17 @@ export function parse(str) {
   } catch {
     return migrate(undefined);
   }
+}
+
+/** Remaining time a stored session needs, in ms, to be resumed rather than started afresh. */
+const RESUME_MIN_MS = 60000;
+
+/** What a start from Play on open plays: { kind: 'resume', presetId, remainingMs } when the stored session (paused, or running until endsAt) has more than a minute left at time now (ms), else { kind: 'fresh', presetId }. */
+export function startPlan(settings, now) {
+  const session = settings?.session;
+  const left = session ? session.pausedRemainingMs ?? (session.endsAt === null ? 0 : session.endsAt - now) : 0;
+  if (left > RESUME_MIN_MS) return { kind: 'resume', presetId: session.presetId, remainingMs: left };
+  return { kind: 'fresh', presetId: settings?.presetId ?? DEFAULT_SETTINGS.presetId };
 }
 
 /** Creates an observable settings store backed by a Storage-like object; storage failures leave it in memory. */

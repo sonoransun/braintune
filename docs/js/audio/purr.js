@@ -1,7 +1,8 @@
 // Purr layer (§6.4 of the plan): a brown loop through a low-pass and a 26 Hz raised-cosine gate,
 // plus a pulse-spectrum oscillator at −10 dB, shaped by the breath planner (inhale / exhale /
-// pause). The pet cue taps the voice before the breath envelope through a dedicated gain that
-// goes to `cueBus` (the master), so it bypasses the purr slider but not the volume.
+// pause), whose tempo and depth drift slowly with the session texture (v0.4 spec §3.8). The pet
+// cue taps the voice before the breath envelope through a dedicated gain that goes to `cueBus`
+// (the master), so it bypasses the purr slider but not the volume.
 // Loop sources start once and keep running silently behind `out` between start/stop.
 
 import { dbToGain, gainToDb } from '../core/levels.js';
@@ -20,8 +21,8 @@ const LP_Q = 1;
 const LP_LOSS_DB = -1.5;
 const WAVE_SAMPLES = 2048;
 
-/** Creates the purr layer into `bus` with the cue tap into `cueBus`: { start() → Promise<boolean>, stop({ seconds }), cue({ seconds }) → Promise<boolean>, dispose(), ready }. */
-export function createPurrLayer(ctx, bus, scheduler, cache, { rng, cueBus } = {}) {
+/** Creates the purr layer into `bus` with the cue tap into `cueBus`, its breaths drifting with `texture`: { start() → Promise<boolean>, stop({ seconds }), cue({ seconds }) → Promise<boolean>, dispose(), ready }. */
+export function createPurrLayer(ctx, bus, scheduler, cache, { rng, cueBus, texture = null } = {}) {
   const now = () => ctx.currentTime + LEAD;
   const params = purrParams();
   const gateData = renderGatePeriod(ctx.sampleRate, params.hz, params);
@@ -103,7 +104,7 @@ export function createPurrLayer(ctx, bus, scheduler, cache, { rng, cueBus } = {}
       const items = [];
       let t0 = Math.max(nextStart, from);
       while (t0 < to) {
-        const breath = planBreath(rng, t0, params);
+        const breath = planBreath(rng, t0, params, texture?.purr.at(t0));
         items.push({ at: t0, events: breath.events });
         t0 = breath.nextStart;
       }

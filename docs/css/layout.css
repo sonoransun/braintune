@@ -13,9 +13,10 @@
 .firstrun { z-index: 7; }
 
 /* --- stage grid (shared) ------------------------------------------------------------------------------------- */
+/* The last row is the water under the status pill: tall phones keep ≥ 88 px there so a settled cat fits on the ledge. */
 .stage {
   display: grid;
-  grid-template-rows: calc(var(--header-h) + env(safe-area-inset-top, 0px)) minmax(0, 1fr) auto auto minmax(72px, 0.5fr);
+  grid-template-rows: calc(var(--header-h) + env(safe-area-inset-top, 0px)) minmax(0, 1fr) auto auto minmax(clamp(72px, 11svh, 96px), 0.5fr);
   grid-template-columns: 100%;
   justify-items: center;
   padding: 0 var(--gutter);
@@ -74,10 +75,11 @@ html[data-layout="desktop"] .panel__inner { padding: 12px 20px 40px; }
 html[data-layout="desktop"] .toasts { left: 24px; right: auto; bottom: 24px; width: min(360px, calc(100vw - 48px)); }
 html[data-layout="short"] .toasts { right: auto; width: calc(40vw - 2 * var(--gutter)); }
 
-/* --- night dim (plan §7.7): UI to 35 %, canvas to 70 % over 2 s; any activity restores in 300 ms ------------- */
-.app, .cats, .scene { transition: opacity 300ms var(--ease-out); }
-html[data-dim="night"] .app, html[data-dim="night"] .cats { opacity: 0.35; transition: opacity 2s var(--ease-breath); }
-html[data-dim="night"] .scene { opacity: 0.7; transition: opacity 2s var(--ease-breath); }
+/* --- night dim (v0.4 §5.4): the UI to 30 % after a minute, 20 % after five, each over 2 s; any activity restores it
+   in 300 ms. The canvas (scene.css) and the cats (cats.css) carry their own two stages. -------------------------- */
+.app { transition: opacity 300ms var(--ease-out); }
+html[data-dim="night"] .app, html[data-dim="deep"] .app { opacity: 0.3; transition: opacity 2s var(--ease-breath); }
+html[data-dim="deep"] .app { opacity: 0.2; }
 
 /* --- narrow phones (< 360): tagline hidden, chips 44 --------------------------------------------------------- */
 @media (max-width: 359px) {

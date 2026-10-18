@@ -1,11 +1,14 @@
-// Rain layer (§6.4 of the plan): a pre-bandpassed pink bed behind a moving low-pass, a brown
-// rumble, and Poisson drops from the 24-variant kit planned with lookahead, one buffer source
+// Rain layer (§6.4 of the plan, v0.4 spec §3.8): a pre-bandpassed pink bed behind a moving low-pass,
+// a brown rumble, and Poisson drops from the 24-variant kit planned with lookahead, one buffer source
 // per drop (gain and playbackRate), disconnected when it ends and capped at 30 per second by the
-// model. The loop sources start once and keep looping silently behind `out` between start/stop,
-// so a slider dragged through zero never doubles a bed.
+// model. Gusts follow the session texture: at each knot of its gust stream the bed glides (τ 2 s)
+// to that gust's level, and each window's drop rate follows the gust at its start. The loop sources
+// start once and keep looping silently behind `out` between start/stop, so a slider dragged through
+// zero never doubles a bed.
 
 import { dbToGain } from '../core/levels.js';
-import { rainParams, initialGust, gustWalk, planDrops } from '../core/rain-model.js';
+import { rainParams, planDrops, gustAt } from '../core/rain-model.js';
+import { TEXTURE_RECIPE } from '../core/texture-model.js';
 import { glideTo, fade } from './automation.js';
 
 const LEAD = 0.01;
@@ -14,15 +17,17 @@ const DROP_LP_HZ = 6000;
 const BED_Q = 0.7;
 const FADE_IN_SECONDS = 1.5;
 const FADE_OUT_SECONDS = 0.5;
-const TAU = Object.freeze({ level: 0.125, filter: 0.08, gust: 0.5 });
+const TAU = Object.freeze({ level: 0.125, filter: 0.08 });
 /** Most drop sources alive at once (3 s of the 30/s cap). */
 const MAX_LIVE_DROPS = 90;
+/** Without a texture there is no wind: the bed holds its level and drops fall at the nominal rate. */
+const CALM_AIR = Object.freeze({ gust: { at: () => 0 }, gustTicks: () => [] });
 
-/** Creates the rain layer into `bus`: { setIntensity(s), start() → Promise<boolean>, stop({ seconds }), dispose(), ready }. */
-export function createRainLayer(ctx, bus, scheduler, cache, { rng, intensity = 0.45 } = {}) {
+/** Creates the rain layer into `bus`, its gusts on `texture` (core/texture-model.js): { setIntensity(s), start() → Promise<boolean>, stop({ seconds }), dispose(), ready }. */
+export function createRainLayer(ctx, bus, scheduler, cache, { rng, intensity = 0.45, texture = null } = {}) {
   const now = () => ctx.currentTime + LEAD;
+  const field = texture ?? CALM_AIR;
   let params = rainParams(intensity);
-  let gust = initialGust(intensity);
   let buffers = null;
   let loops = null;
   let running = false;
@@ -46,11 +51,12 @@ export function createRainLayer(ctx, bus, scheduler, cache, { rng, intensity = 0
     applyLevels(now(), 0);
   });
 
-  const bedLevel = () => dbToGain(params.bedGainDb + gust.gainDb) * (buffers ? buffers.bed.trim : 1);
+  const gust = (t) => gustAt(field.gust.at(t), params.gustSpanDb);
+  const bedLevel = (t) => dbToGain(params.bedGainDb + gust(t).gainDb) * (buffers ? buffers.bed.trim : 1);
   const rumbleLevel = () => dbToGain(params.rumbleGainDb) * (buffers ? buffers.rumble.trim : 1);
 
   function applyLevels(t, tau = TAU.level) {
-    glideTo(bedGain.gain, bedLevel(), t, tau, 'target');
+    glideTo(bedGain.gain, bedLevel(t), t, tau, 'target');
     glideTo(rumbleGain.gain, rumbleLevel(), t, tau, 'target');
     glideTo(bedLP.frequency, params.bedLpHz, t, TAU.filter, 'target');
   }
@@ -90,9 +96,8 @@ export function createRainLayer(ctx, bus, scheduler, cache, { rng, intensity = 0
   const planner = {
     plannedUpTo: 0,
     plan(from, to) {
-      gust = gustWalk(gust, to - from, rng);
-      glideTo(bedGain.gain, bedLevel(), from, TAU.gust, 'target');
-      return planDrops(rng, from, to, params, gust, { variants: buffers.kit.length });
+      for (const { t } of field.gustTicks(from, to)) glideTo(bedGain.gain, bedLevel(t), t, TEXTURE_RECIPE.gust.tau, 'target');
+      return planDrops(rng, from, to, params, gust(from), { variants: buffers.kit.length });
     },
     apply: spawn,
   };
@@ -101,10 +106,9 @@ export function createRainLayer(ctx, bus, scheduler, cache, { rng, intensity = 0
     for (const source of drops) source.stop(t);
   }
 
-  /** Retunes bed, rumble, low-pass, drop rate and gust span for intensity s. */
+  /** Retunes bed, rumble, low-pass, drop rate and gust span for intensity s, from the gust of this moment. */
   function setIntensity(s) {
     params = rainParams(s);
-    gust = { ...gust, spanDb: params.gustSpanDb };
     applyLevels(now());
   }
 

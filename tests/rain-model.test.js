@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAX_DROP_RATE, KIT_VARIANTS, MAX_DROP_SECONDS,
-  rainParams, initialGust, gustWalk, planDrops, renderDropVariant, renderDropKit,
+  rainParams, gustAt, planDrops, renderDropVariant, renderDropKit, kitVariantKind,
 } from '../docs/js/core/rain-model.js';
+import { gustAt as textureGustAt, createTexture } from '../docs/js/core/texture-model.js';
 import { mulberry32 } from '../docs/js/core/rng.js';
 import { dbToGain } from '../docs/js/core/levels.js';
 
@@ -86,43 +87,28 @@ test('planDrops honours the gust rate scale and the 30/s cap, and is empty on an
   assert.deepEqual(planDrops(mulberry32(1), 5, 6, { ...params, dropRate: 0 }), []);
 });
 
-test('gust walk stays within ±spanDb and rate 0.6–1.4, with 10–25 s segments', () => {
-  const rng = mulberry32(11);
+test('gustAt, re-exported from the texture model: bed offset within ±gustSpanDb and drop rate 0.6–1.4, reached at ±0.77', () => {
+  assert.equal(gustAt, textureGustAt);
   for (const s of [0, 0.5, 1]) {
-    let state = initialGust(s);
-    assert.equal(state.gainDb, 0);
-    assert.equal(state.rateScale, 1);
-    const span = 1 + 2 * s;
-    const durations = [];
-    let lastDuration = null;
-    for (let i = 0; i < 20000; i++) {
-      state = gustWalk(state, 0.2, rng);
-      assert.ok(Math.abs(state.gainDb) <= span + 1e-9, `gain ${state.gainDb} outside ±${span}`);
-      assert.ok(state.rateScale >= 0.6 - 1e-9 && state.rateScale <= 1.4 + 1e-9, `rate ${state.rateScale}`);
-      if (state.duration !== lastDuration) {
-        durations.push(state.duration);
-        lastDuration = state.duration;
-      }
+    const span = rainParams(s).gustSpanDb;
+    for (let x = -1.2; x <= 1.2; x += 0.01) {
+      const { gainDb, rateScale } = gustAt(x, span);
+      assert.ok(Math.abs(gainDb) <= span + 1e-9, `gain ${gainDb} outside ±${span}`);
+      assert.ok(rateScale >= 0.6 - 1e-9 && rateScale <= 1.4 + 1e-9, `rate ${rateScale}`);
     }
-    assert.ok(durations.length > 100, 'many segments walked');
-    for (const d of durations) assert.ok(d >= 10 && d <= 25, `segment ${d} s`);
-    const seen = new Set(durations.map((d) => d.toFixed(3)));
-    assert.ok(seen.size > durations.length / 2, 'segments vary');
+    near(gustAt(0.77, span).gainDb, span, 1e-12, `full gust at s = ${s}`);
+    near(gustAt(-0.77, span).rateScale, 0.6, 1e-12);
   }
 });
 
-test('gustWalk moves smoothly and leaves the previous state untouched', () => {
-  const rng = mulberry32(2);
-  let state = initialGust(1);
-  const first = gustWalk(state, 0.1, rng);
-  assert.equal(state.elapsed, 0, 'input not mutated');
-  let prev = first;
-  for (let i = 0; i < 500; i++) {
-    const next = gustWalk(prev, 0.1, rng);
-    assert.ok(Math.abs(next.gainDb - prev.gainDb) < 0.2, `gain jumps by ${next.gainDb - prev.gainDb} dB in 100 ms`);
-    assert.ok(Math.abs(next.rateScale - prev.rateScale) < 0.05, 'rate jumps');
-    prev = next;
-  }
+test('gusts on the texture curve: an hour of gust knots stays in bounds, uses its range and moves smoothly', () => {
+  const texture = createTexture(5);
+  const span = rainParams(0.35).gustSpanDb;
+  const knots = texture.gustTicks(0, 3600);
+  assert.ok(knots.length >= 3600 / 8.1, `${knots.length} gust knots`);
+  const gains = knots.map(({ t }) => gustAt(texture.gust.at(t), span).gainDb);
+  assert.ok(Math.max(...gains) > span / 2 && Math.min(...gains) < -span / 2, 'both louder and quieter gusts happen');
+  for (let i = 1; i < gains.length; i++) assert.ok(Math.abs(gains[i] - gains[i - 1]) < span, 'no gust jumps across its whole span between knots');
 });
 
 test('drop kit: 24 stereo variants, 8 plinks then patter, each at most 130 ms, peak at most 0.9, finite, panned within ±0.8', () => {
@@ -147,6 +133,15 @@ test('drop kit: 24 stereo variants, 8 plinks then patter, each at most 130 ms, p
     assert.ok(Math.abs(variant.pan) <= 0.8, `pan ${variant.pan}`);
     assert.ok(Math.abs(left[left.length - 1]) === 0, 'ends on zero');
   }
+});
+
+test('kitVariantKind: the first round(35 %) of a kit are plinks; renderDropKit follows it variant by variant', () => {
+  assert.deepEqual(Array.from({ length: KIT_VARIANTS }, (_, i) => kitVariantKind(i)), [...Array(8).fill('plink'), ...Array(16).fill('patter')]);
+  assert.equal(kitVariantKind(0, 4), 'plink', 'round(1.4) = 1 plink in a kit of four');
+  assert.equal(kitVariantKind(1, 4), 'patter');
+  const rng = mulberry32(31);
+  const oneByOne = Array.from({ length: KIT_VARIANTS }, (_, i) => renderDropVariant(SR, rng, kitVariantKind(i)));
+  assert.deepEqual(oneByOne, renderDropKit(SR, mulberry32(31)), 'the same kit whether rendered at once or one variant at a time');
 });
 
 test('drop variants are deterministic per seed and the pan is constant-power', () => {
